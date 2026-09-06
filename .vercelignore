@@ -1,0 +1,5 @@
+.git/
+output/
+.playwright-cli/
+tests/
+*.md
