@@ -43,6 +43,6 @@ test('backup round-trip and strict corrupt record rejection',() => {
 });
 test('lesson and passage coverage',() => {
   vm.runInContext(fs.readFileSync(require('node:path').join(__dirname,'../data.js'),'utf8') + '\nglobalThis.coverage = {en:LESSONS.filter(l=>l.group==="en").length,zh:LESSONS.filter(l=>l.group==="zh").length,texts:ZH_TEXTS.length,minLength:Math.min(...ZH_TEXTS.map(t=>t.length))};',context);
-  assert.equal(context.coverage.en,6); assert.equal(context.coverage.zh,8);
+  assert.equal(context.coverage.en,7); assert.equal(context.coverage.zh,8);
   assert.equal(context.coverage.texts,15); assert(context.coverage.minLength >= 500);
 });

@@ -64,6 +64,11 @@ $('#tutorial-input').oninput = e => {
   const value = e.target.value, target = 'asdf jkl;';
   $('#tutorial-feedback').textContent = !value ? '先求準確，慢慢輸入即可。' : value === target ? '✓ 全部正確！可以前往下一步。' : target.startsWith(value) ? '目前都正確，繼續慢慢輸入。' : '有字元不一致，請檢查字母、空格與半形分號，用 Backspace 修正。';
 };
+$('#tutorial-symbol-lesson').onclick = () => {lessonId = 'symbols'; show('lessons');};
+$('#symbol-input').oninput = e => {
+  const value = e.target.value, target = '! @ # $ % ^ & * ( )';
+  $('#symbol-feedback').textContent = !value ? '先練 !，再依序輸入其他符號；這裡不計時、不存成績。' : value === target ? '✓ 全部正確！你已學會數字列符號，可以前往下一步。' : target.startsWith(value) ? '目前都正確。繼續用另一手的 Shift，留意符號之間的空格。' : '有字元不一致：檢查 Shift、半形符號與空格，用 Backspace 修正。';
+};
 function stats() {
   const rec = data.testRecords.filter(r => r.studentId === (activeStudent || null));
   const best = lang => rec.filter(r => r.language === lang).sort(C.compareScores)[0]?.speed;
@@ -92,14 +97,20 @@ function paintText(target, value, element) {
     } else if (typed.length) element.scrollTop = element.scrollHeight;
   }
 }
-const keyRows = ['1234567890-','qwertyuiop','asdfghjkl;','zxcvbnm,./'];
+const keyRows = ['`1234567890-=','qwertyuiop','asdfghjkl;','zxcvbnm,./'];
+const shiftedKeys = Object.fromEntries(SHIFT_PAIRS.map(([key,symbol]) => [symbol,key]));
 const bopomofo = Object.fromEntries(C.chars('1qaz2wsxedcrfv5tgbyhnujm8ik,9ol.0p;/-3467').map((k,i) => [k,C.chars('ㄅㄆㄇㄈㄉㄊㄋㄌㄍㄎㄏㄐㄑㄒㄓㄔㄕㄖㄗㄘㄙㄧㄨㄩㄚㄛㄜㄝㄞㄟㄠㄡㄢㄣㄤㄥㄦˇˋˊ˙')[i]]));
 function fingerFor(key) {
   const groups = [['1qaz','左手小指'],['2wsx','左手無名指'],['3edc','左手中指'],['45rtfgvb','左手食指'],['67yuhjnm','右手食指'],['8ik,','右手中指'],['9ol.','右手無名指'],['0p;/-','右手小指']];
+  if (key === '`') return '左手小指';
+  if (key === '=') return '右手小指';
   return key === ' ' ? '拇指按空白鍵' : groups.find(([keys]) => keys.includes(key.toLowerCase()))?.[1] || '請使用自己的輸入法選字／標點配置';
 }
+function shiftReferenceHTML() {
+  return `<div class="shift-map" aria-label="數字列上下層符號對照">${SHIFT_PAIRS.map(([key,symbol]) => `<div class="shift-key"><strong>${escapeHtml(symbol)}</strong><span>${escapeHtml(key)}</span></div>`).join('')}</div><p class="shift-caption">上排：按住 Shift 的結果 ／ 下排：直接按鍵的結果。例：Shift + 2 = @。不同語系鍵盤配置可能不同。</p>`;
+}
 function keyboardHTML(l) {
-  return `<div class="virtual-keyboard" aria-label="實體鍵盤與手指對照">${keyRows.map(row => `<div class="keyboard-row">${C.chars(row).map(k => `<span class="keyboard-key" data-key="${k}" title="${k.toUpperCase()}：${fingerFor(k)}${l.group === 'zh' && bopomofo[k] ? '／' + bopomofo[k] : ''}"><b>${k.toUpperCase()}</b>${l.group === 'zh' ? `<small>${bopomofo[k] || ''}</small>` : ''}</span>`).join('')}</div>`).join('')}<div class="keyboard-row"><span class="keyboard-key space-key" data-key=" ">SPACE · 拇指</span></div></div>`;
+  return `<div class="virtual-keyboard" aria-label="實體鍵盤與手指對照">${keyRows.map(row => `<div class="keyboard-row">${C.chars(row).map(k => `<span class="keyboard-key" data-key="${k}" title="${k.toUpperCase()}：${fingerFor(k)}${l.group === 'zh' && bopomofo[k] ? '／' + bopomofo[k] : ''}">${l.group === 'en' && SHIFT_PAIRS.some(([key]) => key === k) ? `<small class="shift-symbol">${escapeHtml(SHIFT_PAIRS.find(([key]) => key === k)[1])}</small>` : ''}<b>${k.toUpperCase()}</b>${l.group === 'zh' ? `<small>${bopomofo[k] || ''}</small>` : ''}</span>`).join('')}</div>`).join('')}<div class="keyboard-row"><span class="keyboard-key shift-keycap" data-key="ShiftLeft">左 Shift</span><span class="keyboard-key space-key" data-key=" ">SPACE · 拇指</span><span class="keyboard-key shift-keycap" data-key="ShiftRight">右 Shift</span></div></div>`;
 }
 function renderLessons() {
   for (const [group, target] of [['en','#lesson-list'],['zh','#zh-lesson-list']]) {
@@ -111,7 +122,7 @@ function renderLessons() {
 function renderLessonDetail() {
   const l = LESSONS.find(l => l.id === lessonId) || LESSONS[0];
   practice = {start:0, composing:false, done:false, committed:''};
-  $('#lesson-detail').innerHTML = `<div class="lesson-detail"><div class="lesson-head"><div><p class="eyebrow">LESSON ${String(LESSONS.indexOf(l) + 1).padStart(2,'0')}</p><h2 id="lesson-title" tabindex="-1">${l.title} <span>${l.sub}</span></h2><p>${l.desc}</p></div><span>${data.lessonProgress[l.id] ? '✓ 已完成' : ''}</span></div><p class="goal">本課目標：${l.goal}。完整輸入且正確率至少 90% 即可完成。</p><p>${l.rawKeys ? '請切換英文輸入。本課會把標準注音實體按鍵轉成注音符號，不必用輸入法單獨選出符號。' : l.group === 'zh' ? '請切換自己的中文輸入法；選字確認後才計入輸入。' : '請切換英文輸入並關閉 Caps Lock。大寫字母使用另一手的小指按住 Shift。'}</p>${keyboardHTML(l)}<p id="finger-hint" class="finger"></p><div class="practice"><div id="practice-text" class="practice-text"></div><label for="practice-input">照著上方文字輸入（空格與標點也要一致）</label><textarea id="practice-input" class="practice-input" rows="3" autocomplete="off" autocapitalize="off" spellcheck="false"></textarea><div class="progress"><i id="lesson-progress-bar"></i></div><div class="practice-foot"><span id="practice-status"></span><div class="actions"><button id="practice-again" class="btn quiet">重新練習</button><button id="complete-lesson" class="btn primary" disabled>完成本課 →</button></div></div><p id="lesson-message" role="status"></p></div></div>`;
+  $('#lesson-detail').innerHTML = `<div class="lesson-detail"><div class="lesson-head"><div><p class="eyebrow">LESSON ${String(LESSONS.indexOf(l) + 1).padStart(2,'0')}</p><h2 id="lesson-title" tabindex="-1">${l.title} <span>${l.sub}</span></h2><p>${l.desc}</p></div><span>${data.lessonProgress[l.id] ? '✓ 已完成' : ''}</span></div><p class="goal">本課目標：${l.goal}。完整輸入且正確率至少 90% 即可完成。</p><p>${l.rawKeys ? '請切換英文輸入。本課會把標準注音實體按鍵轉成注音符號，不必用輸入法單獨選出符號。' : l.group === 'zh' ? '請切換自己的中文輸入法；選字確認後才計入輸入。' : '請切換英文輸入並關閉 Caps Lock。大寫字母使用另一手的小指按住 Shift。'}</p>${l.id === 'symbols' ? shiftReferenceHTML() : ''}${keyboardHTML(l)}<p id="finger-hint" class="finger"></p><div class="practice"><div id="practice-text" class="practice-text"></div><label for="practice-input">照著上方文字輸入（空格與標點也要一致）</label><textarea id="practice-input" class="practice-input" rows="3" autocomplete="off" autocapitalize="off" spellcheck="false"></textarea><div class="progress"><i id="lesson-progress-bar"></i></div><div class="practice-foot"><span id="practice-status"></span><div class="actions"><button id="practice-again" class="btn quiet">重新練習</button><button id="complete-lesson" class="btn primary" disabled>完成本課 →</button></div></div><p id="lesson-message" role="status"></p></div></div>`;
   const input = $('#practice-input');
   const paint = () => {
     if (practice.composing || practice.done) return;
@@ -127,9 +138,11 @@ function renderLessonDetail() {
     $('#practice-status').textContent = `${m.speed} ${l.group === 'en' ? 'WPM' : 'CPM'} · 正確率 ${m.accuracy}% · ${m.progress}% · 錯字 ${m.errors}`;
     $('#lesson-progress-bar').style.width = m.progress + '%';
     const next = C.chars(l.text)[m.typed];
-    const physical = l.rawKeys ? Object.keys(bopomofo).find(k => bopomofo[k] === next) || next : next;
-    $$('.keyboard-key').forEach(k => k.classList.toggle('key-current', !!physical && k.dataset.key === physical.toLowerCase()));
-    $('#finger-hint').textContent = next ? `下一字：${next === ' ' ? '空格' : next} ｜ ${physical ? fingerFor(physical) : l.fingers}${l.rawKeys && physical ? ' ｜ 按鍵 ' + physical.toUpperCase() : ''}` : '已輸入到最後，檢查錯字後完成本課。';
+    const physical = l.rawKeys ? Object.keys(bopomofo).find(k => bopomofo[k] === next) || next : shiftedKeys[next] || next;
+    const needsShift = l.group === 'en' && (Object.hasOwn(shiftedKeys,next) || /^[A-Z]$/.test(next || ''));
+    const shiftSide = physical && fingerFor(physical).startsWith('左') ? 'Right' : 'Left';
+    $$('.keyboard-key').forEach(k => k.classList.toggle('key-current', !!physical && (k.dataset.key === physical.toLowerCase() || needsShift && k.dataset.key === 'Shift' + shiftSide)));
+    $('#finger-hint').textContent = next ? `下一字：${next === ' ' ? '空格' : next} ｜ ${physical ? fingerFor(physical) : l.fingers}${physical && (l.rawKeys || needsShift) ? ' ｜ 按鍵 ' + physical.toUpperCase() : ''}${needsShift ? ` ＋ ${shiftSide === 'Right' ? '右' : '左'}手小指按住 ${shiftSide === 'Right' ? '右' : '左'} Shift` : ''}` : '已輸入到最後，檢查錯字後完成本課。';
     $('#complete-lesson').disabled = m.typed !== C.chars(l.text).length || m.accuracy < 90;
   };
   input.addEventListener('compositionstart', () => {practice.composing = true;});
@@ -356,5 +369,6 @@ if (storageIssue) {
   $('#storage-warning').hidden = false; $('#storage-message').textContent = storageIssue;
   $('#download-raw').onclick = () => {try {download('typing-practice-room-recovery.txt',localStorage.getItem(KEY) || '', 'text/plain');} catch {toast('瀏覽器禁止讀取儲存空間。');}};
 }
+$$('.shift-reference').forEach(el => {el.innerHTML = shiftReferenceHTML();});
 setSelected('#lang','en'); setSelected('#duration','60');
 fillStudents(); stats(); renderLessons(); renderTeacher();
