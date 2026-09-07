@@ -21,14 +21,15 @@
 
 ### Git／部署
 
-- 目前 Codex 修改尚未提交、推送或部署。
-- Production schema 已建立；部署後需確認正式教師登入與密碼變更流程。
+- GitHub commit `8885a77` 已推送到 `main`。
+- Vercel Production：`https://typing-practice-room.vercel.app`，已完成部署。
+- Production schema 已建立；正式部署完成。
 
 ### 待辦
 
-- 提交並推送目前修改。
-- 部署 Vercel Production。
-- 測試正式 `/api/teacher` 與 `/api/records`，確認未登入仍拒絕查詢。
+- 已測試正式 `/api/teacher` 未登入回 HTTP 200。
+- 已測試正式 `/api/records` 未登入回 HTTP 401，雲端查詢權限正常。
+- 尚未在正式站執行真實密碼變更，以避免未經使用者要求修改教師密碼。
 
 ## 2026-09-07｜新手引導最後一步改為進入教學
 
