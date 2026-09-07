@@ -19,11 +19,12 @@
 
 ### Git／部署
 
-- 尚未提交、推送或部署。
+- GitHub 功能 commit `8e6926f` 已推送到 `main`。
+- Vercel Production：`https://typing-practice-room.vercel.app`，已完成部署。
 
 ### 待辦
 
-- 發布前確認正式網站的排行榜入口與雲端成績查詢仍可使用。
+- 已確認正式網站排行榜入口與頁面切換正常；後續若修改排行榜邏輯，需同步測試雲端成績載入。
 
 ## 2026-09-07｜Supabase 改用 Vercel Postgres
 
