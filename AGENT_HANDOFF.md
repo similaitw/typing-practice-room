@@ -31,6 +31,13 @@
 - 重新部署後測試寫入、教師查詢與篩選。
 - `npm install` 回報目前依賴樹有 3 個 high severity audit 警告，部署前應檢查是否為可接受的間接依賴風險。
 
+### 發布結果
+
+- GitHub commit `f1a81f0` 已推送到 `main`。
+- Vercel Production：`https://typing-practice-room.vercel.app`。
+- 已部署 Vercel Postgres／Neon API；未登入 GET `/api/records` 回傳 HTTP 401，查詢權限保護正常。
+- Production `typing_records` schema 已在部署前初始化完成。
+
 ## 2026-09-07｜新增 Supabase 雲端成績與查詢 API
 
 ### 修改
