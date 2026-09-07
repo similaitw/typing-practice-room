@@ -37,7 +37,7 @@ function show(view) {
   $$('.view').forEach(x => x.classList.toggle('active', x.id === view));
   $$('.nav').forEach(x => {x.classList.toggle('active', x.dataset.view === view); x.setAttribute('aria-current', x.dataset.view === view ? 'page' : 'false');});
   if (view === 'lessons') renderLessons();
-  if (view === 'test') {fillStudents(); resetTest();}
+  if (view === 'test') {fillStudents(); resetTest(); renderPlayerRanking();}
   if (view === 'teacher') renderTeacher();
   if (view === 'overview') stats();
   window.scrollTo({top:0, behavior:matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth'});
@@ -184,7 +184,7 @@ function resetTest() {
   test = {...test, started:false, finished:false, start:0, timer:null, composing:false, committed:'', text:pickText()};
   test.language = test.lang === 'custom' ? C.languageOf(test.text) : test.lang;
   $('#custom-editor').hidden = test.lang !== 'custom';
-  $('#student-select').disabled = false;
+  lockIdentity(false);
   $('#timer').textContent = test.duration;
   $('#live-speed').textContent = '0'; $('#live-accuracy').textContent = '100'; $('#live-progress').textContent = '0';
   $('#live-unit').textContent = test.language === 'zh' ? 'CPM' : 'WPM';
@@ -209,7 +209,7 @@ function onTestInput() {
     test.started = true; test.start = performance.now();
     test.studentId = $('#student-select').value || null;
     test.studentLabel = data.students.find(s => s.id === test.studentId);
-    $('#student-select').disabled = true;
+    lockIdentity(true);
     $('#test-state').textContent = '輸入中，先求準確。選字確認後才計入字元。';
     test.timer = setInterval(updateTest, 100);
   }
@@ -221,17 +221,23 @@ function finishTest(measured) {
   const seconds = Math.min(test.duration, (performance.now() - test.start) / 1000);
   const m = measured || C.measure(test.committed,test.text,seconds,test.language);
   $('#test-input').value = test.committed; $('#test-input').disabled = true;
-  $('#student-select').disabled = false;
+  lockIdentity(false);
   const s = test.studentLabel;
   const record = {id:uid(),studentId:test.studentId,studentLabel:s ? `${s.seat} ${s.name}`.trim() : '訪客',language:test.language,
     source:test.lang === 'custom' ? 'custom' : 'builtin',duration:test.duration,elapsedSeconds:Number(m.elapsed.toFixed(3)),speed:m.speed,
     unit:test.language === 'zh' ? 'CPM' : 'WPM',accuracy:m.accuracy,correctChars:m.correct,errors:m.errors,typedLength:m.typed,
     targetLength:C.chars(test.text).length,createdAt:new Date().toISOString()};
   if (m.typed) {data.testRecords.push(record); save(); stats();}
+  $('#player-ranking-language').value = test.language;
+  renderPlayerRanking();
   $('#test-state').textContent = '測驗完成';
   const panel = $('#result-panel'); panel.hidden = false;
   panel.innerHTML = `<h2 tabindex="-1">${m.accuracy >= 90 ? '穩穩完成！' : '每次練習都算數。'}</h2><p>${m.typed ? escapeHtml(record.studentLabel) + ' · 已記錄本次結果' : '沒有輸入字元，本次不儲存成績'}</p><div class="result-stats"><div><strong>${m.speed}</strong><span>${record.unit}</span></div><div><strong>${m.accuracy}%</strong><span>正確率</span></div><div><strong>${m.correct}</strong><span>正確字元</span></div><div><strong>${m.errors}</strong><span>錯字</span></div></div><button id="again" class="btn">再測一次 ↻</button>`;
   $('#again').onclick = () => {resetTest(); $('#test-input').focus();};
+  const rankingButton = document.createElement('button');
+  rankingButton.className = 'btn'; rankingButton.textContent = '查看排行榜 ↓';
+  rankingButton.onclick = () => {$('#player-ranking-title').focus(); $('#player-ranking').scrollIntoView({block:'start'});};
+  panel.append(rankingButton);
   panel.querySelector('h2').focus();
 }
 $('#test-input').addEventListener('compositionstart', () => {test.composing = true;});
@@ -243,13 +249,55 @@ $('#reset-test').onclick = () => {resetTest(); $('#test-input').focus();};
 $('#duration').onclick = e => {if (e.target.dataset.value) {test.duration = Number(e.target.dataset.value); setSelected('#duration',String(test.duration)); resetTest();}};
 $('#lang').onclick = e => {if (e.target.dataset.value) {test.lang = e.target.dataset.value; setSelected('#lang',test.lang); resetTest();}};
 $('#apply-custom').onclick = () => {resetTest(); if (test.text) $('#test-input').focus();};
-$('#custom-text').oninput = () => {if (test.lang === 'custom') {clearInterval(test.timer); test.started = false; test.finished = true; $('#test-input').disabled = true; $('#student-select').disabled = false; $('#test-state').textContent = '文章已變更，請按「套用文章」重新開始。';}};
-$('#student-select').onchange = e => {activeStudent = e.target.value; stats(); resetTest();};
+$('#custom-text').oninput = () => {if (test.lang === 'custom') {clearInterval(test.timer); test.started = false; test.finished = true; $('#test-input').disabled = true; lockIdentity(false); $('#test-state').textContent = '文章已變更，請按「套用文章」重新開始。';}};
+$('#student-select').onchange = e => {activeStudent = e.target.value; syncIdentity(); stats(); resetTest(); renderPlayerRanking();};
+function lockIdentity(locked) {
+  $('#student-select').disabled = locked;
+  $('#identity-fields').disabled = locked;
+}
+function syncIdentity() {
+  const person = data.students.find(s => s.id === activeStudent);
+  $('#player-name').value = person?.name || '';
+  $('#player-seat').value = person?.seat || '';
+  $('#identity-status').textContent = person ? `目前練習者：${(person.seat + ' ' + person.name).trim()}。完成測速且達到正確率門檻，即可列入排行榜。` : '目前為訪客，成績不列入排行榜。';
+}
+$('#join-ranking').onsubmit = e => {
+  e.preventDefault();
+  if (test.started && !test.finished) return;
+  const name = $('#player-name').value.trim();
+  let seat = $('#player-seat').value.trim();
+  if (!name || name.length > 80 || seat.length > 20 || /[\r\n\t]/.test(name + seat)) {
+    $('#identity-status').textContent = '請輸入有效姓名（最多 80 字）與座號（最多 20 字）。';
+    return;
+  }
+  if (/^\d+$/.test(seat)) seat = seat.padStart(2,'0');
+  let person = data.students.find(s => s.name === name && s.seat === seat);
+  if (!person && !seat) {
+    const matches = data.students.filter(s => s.name === name);
+    if (matches.length > 1) {$('#identity-status').textContent = '名單有多位同名練習者，請填座號或從下方名單選擇。'; return;}
+    person = matches[0];
+  }
+  if (!person) {
+    if (data.students.length >= 2000) {$('#identity-status').textContent = '名單已達 2,000 人上限，請從已有名單選擇。'; return;}
+    person = {id:uid(),seat,name,createdAt:new Date().toISOString()};
+    data.students.push(person); save();
+  }
+  activeStudent = person.id; fillStudents(); stats(); resetTest(); renderPlayerRanking();
+  if (!$('#test-input').disabled) $('#test-input').focus();
+};
+function renderPlayerRanking() {
+  const language = $('#player-ranking-language').value, threshold = data.settings.threshold ?? 90;
+  const rows = C.rank(data.testRecords,language,threshold,data.students);
+  $('#player-ranking-rule').textContent = `個人最佳速度排名，最低正確率 ${threshold}%。同速先比正確率，再比紀錄時間；訪客不列入。`;
+  $('#player-ranking-list').innerHTML = rows.length ? rows.map((r,i) => `<div class="rank ${r.studentId === activeStudent ? 'rank-self' : ''}"><span class="rank-no">${i+1}</span><span class="rank-name"><strong>${escapeHtml(r.studentLabel)}${r.studentId === activeStudent ? '（目前練習者）' : ''}</strong><small>${formatDate(r.createdAt)}</small></span><span class="rank-speed"><strong>${r.speed}</strong><small>${r.unit}</small></span><span class="rank-accuracy">${r.accuracy}%</span></div>`).join('') : '<div class="empty">還沒有符合門檻的成績。填好姓名，完成一次測速就能挑戰上榜！</div>';
+}
+$('#player-ranking-language').onchange = renderPlayerRanking;
 document.addEventListener('keydown', e => {if (e.ctrlKey && e.key === 'Enter' && $('#test').classList.contains('active')) {e.preventDefault(); resetTest(); $('#test-input').focus();}});
 function fillStudents() {
   if (!data.students.some(s => s.id === activeStudent)) activeStudent = '';
   $('#student-select').innerHTML = '<option value="">訪客模式（不列入排行榜）</option>' + data.students.map(s => `<option value="${escapeHtml(s.id)}">${escapeHtml((s.seat + ' ' + s.name).trim())}</option>`).join('');
   $('#student-select').value = activeStudent;
+  syncIdentity();
 }
 function parseRoster(raw) {
   return raw.split(/\r?\n/).map(x => x.trim()).filter(Boolean).map(line => {
