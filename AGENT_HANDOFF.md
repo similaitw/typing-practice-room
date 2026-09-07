@@ -33,6 +33,13 @@
 - Vercel 專案：`typing-practice-room`，已連結目前工作區。
 - 發布前自動測試：10 tests passed, 0 failed。
 
+### 發布結果
+
+- GitHub：commit `3c75147` 已推送到 `main`。
+- Vercel Production：`https://typing-practice-room.vercel.app`。
+- Vercel deployment alias 已成功更新，正式頁面 smoke test 確認首頁手指定位圖可見。
+- 本次正式部署包含首頁定位圖與 QWERTY 鍵盤修改。
+
 ## 2026-09-07｜接手現況盤點
 
 ### 目前版本
