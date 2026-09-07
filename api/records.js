@@ -5,7 +5,7 @@ const {neon} = require('@neondatabase/serverless');
 const COOKIE = '__Host-typing-teacher';
 const TTL = 4 * 60 * 60;
 const digest = value => crypto.createHash('sha256').update(value).digest();
-const equal = (a, b) => typeof a === 'string' && a.length === 64 && crypto.timingSafeEqual(digest(a), digest(b));
+const equal = (a, b) => typeof a === 'string' && a.length === b.length && crypto.timingSafeEqual(digest(a), digest(b));
 function sessionValid(header, secret, password) {
   const cookie = (header || '').split(';').map(s => s.trim()).find(s => s.startsWith(COOKIE + '='));
   if (!cookie) return false;

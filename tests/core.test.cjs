@@ -46,3 +46,12 @@ test('lesson and passage coverage',() => {
   assert.equal(context.coverage.en,7); assert.equal(context.coverage.zh,8);
   assert.equal(context.coverage.texts,15); assert(context.coverage.minLength >= 500);
 });
+test('class, name and seat survive backup round-trip and optional CSV class column',()=>{
+  const withClass={...student,className:'701'};
+  const detailed={...record,studentClass:'701',studentName:student.name,studentSeat:'01'};
+  const data={...C.emptyData(),students:[withClass],testRecords:[detailed]};
+  assert.deepEqual(plain(C.validateData(plain(data))),plain(data));
+  assert.deepEqual(plain(C.rosterCSV('班級,姓名,座號\n701,同名學生,1\n702,同名學生,1')),
+    [{className:'701',name:'同名學生',seat:'01'},{className:'702',name:'同名學生',seat:'01'}]);
+  assert.throws(()=>C.validateData({...data,students:[{...withClass,className:'a'.repeat(41)}]}));
+});
