@@ -1,6 +1,6 @@
 # 指尖練習室 | Typing Practice Room
 
-給國中資訊課使用的打字新手教學、課程、測速與班級成績工具。純 HTML、CSS、原生 JavaScript，無建置步驟。
+給國中資訊課使用的打字新手教學、課程、測速與班級成績工具。前端使用 HTML、CSS、原生 JavaScript，無建置步驟；教師登入由 Vercel Function 驗證。
 
 ## 一步一步開始
 
@@ -28,7 +28,7 @@
 
 ## 教師操作
 
-1. 到「教師端 → 學生名單」，每行貼上 `01 練習同學甲` 或姓名，按「儲存名單」。此操作為新增，完全相同的座號與姓名會略過。
+1. 點「教師端」，輸入教師密碼登入，再到「學生名單」，每行貼上 `01 練習同學甲` 或姓名，按「儲存名單」。此操作為新增，完全相同的座號與姓名會略過。
 2. CSV 首列包含「座號、姓名」，可交換欄位順序；讀取後確認名單，再按「儲存名單」。檔案上限 1 MB，最多 2,000 位學生。
 3. 學生到「打字測速」選自己的名字後測驗。
 4. 到「成績與排行榜」設定篩選，按「匯出篩選結果 CSV」。Excel 可辨識 UTF-8 BOM 中文編碼。
@@ -42,13 +42,13 @@
 python -m http.server 4173
 ```
 
-開啟 `http://localhost:4173`。程式與字型不依賴外部 CDN；可使用系統字型離線練習。
+開啟 `http://localhost:4173`。程式與字型不依賴外部 CDN；學生可離線練習。教師端必須連線到已設定密碼的 Vercel 網站；直接開啟 HTML 或 Python 靜態伺服器不提供教師登入，會保持鎖定。
 
 ## 資料與限制
 
-名單、設定、課程進度與成績存在瀏覽器 `localStorage`，key 為 `typingPracticeRoomData`，不傳送到伺服器，不使用 Cookie 或分析追蹤。自訂文章只保留在目前頁面，JSON 備份不含文章內容。
+名單、設定、課程進度與成績存在瀏覽器 `localStorage`，key 為 `typingPracticeRoomData`，不傳送到伺服器，不使用分析追蹤。教師登入會建立 HttpOnly、Secure、SameSite=Strict 的工作階段 Cookie，有效 4 小時。自訂文章只保留在目前頁面，JSON 備份不含文章內容。
 
-不同電腦、瀏覽器、網址（包括本機與正式網站）不會同步資料。課程進度由目前瀏覽器共用；首頁成績顯示目前選取練習者。教師頁沒有登入權限隔離，適合本機課堂工具，不是雲端班級管理系統。多台電腦的成績可各自匯出 CSV 後彙整；JSON 還原不是合併。
+不同電腦、瀏覽器、網址（包括本機與正式網站）不會同步資料。課程進度由目前瀏覽器共用；首頁成績顯示目前選取練習者。教師頁需密碼登入，管理操作會重新驗證登入憑證；密碼只存在 Vercel 伺服器環境變數。這是教師介面操作保護，資料本身仍在 localStorage，無法阻止裝置使用者透過開發者工具查看或修改本機資料，也不是跨裝置雲端資料權限系統。多台電腦的成績可各自匯出 CSV 後彙整；JSON 還原不是合併。
 
 網頁不能設定作業系統輸入法；實際選字與標點快捷鍵依輸入法而異。平板與手機可使用，練十指指法建議接實體鍵盤。貼上與拖放不計入練習／測速；本工具不提供正式考試監考。離開測速頁、修改語言或時長會重設進行中的測驗。
 
@@ -74,12 +74,12 @@ git push origin main
 vercel --prod
 ```
 
-GitHub Pages 也可使用：在儲存庫的 Pages 設定選擇從 `main` 分支的根目錄發布。
+GitHub Pages 僅能提供學生端靜態功能，不支援本專案教師登入 API。完整功能請使用 Vercel。
 
 ## 驗證
 
 ```sh
-node --test tests/core.test.cjs
+node --test tests/core.test.cjs tests/teacher-auth.test.cjs
 node --check app.js
 node --check core.js
 node --check data.js
@@ -97,3 +97,12 @@ node --check data.js
 - `favicon.svg`：圖示
 - `tests/core.test.cjs`：資料與計算測試
 - `vercel.json`：靜態網站設定
+
+## 教師密碼管理
+
+- Vercel Production 環境變數 `TEACHER_PASSWORD`：教師密碼，至少 12 字；建議保留高強度隨機密碼。
+- `TEACHER_SESSION_SECRET`：至少 32 字的隨機簽章密鑰，不可提供给學生或放在前端。
+- 修改環境變數後重新部署；變更密碼或簽章密鑰會讓舊的登入憑證失效。
+- 預覽環境需另行設定環境變數，未設定時教師登入會拒絕開放。
+- 初始密碼另行交付，不存入 GitHub。
+- `api/teacher.js`：登入、工作階段確認與登出；`teacher-auth.js`：登入介面與管理操作保護。

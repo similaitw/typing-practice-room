@@ -31,7 +31,8 @@ function save() {
   try {localStorage.setItem(KEY, JSON.stringify(data));}
   catch {toast('瀏覽器無法儲存，請匯出 JSON 保存目前資料。');}
 }
-function show(view) {
+function show(view, teacherVerified = false) {
+  if (view === 'teacher' && (!teacherVerified || !teacherIsActive())) {openTeacher(); return;}
   if (!document.getElementById(view)?.classList.contains('view')) return;
   if (view !== 'test') {clearInterval(test.timer); test.started = false;}
   $$('.view').forEach(x => x.classList.toggle('active', x.id === view));
@@ -318,6 +319,7 @@ function mergeRoster(entries) {
   return added;
 }
 function renderTeacher() {
+  if (!teacherIsActive()) return;
   fillStudents();
   $('#student-count').textContent = `${data.students.length} 人`;
   $('#student-list').innerHTML = data.students.length ? data.students.map((s,i) => `<div class="student"><span><small>${escapeHtml(s.seat)}</small>${escapeHtml(s.name)}</span><div class="actions"><button data-edit="${i}" aria-label="編輯 ${escapeHtml(s.name)}">編輯</button><button data-remove="${i}" aria-label="刪除 ${escapeHtml(s.name)}">刪除</button></div></div>`).join('') : '<div class="empty">還沒有學生名單。</div>';
@@ -340,12 +342,14 @@ function renderTeacher() {
   $('#filter-student').innerHTML = '<option value="">全部學生與訪客</option><option value="guest">訪客</option>' + data.students.map(s => `<option value="${escapeHtml(s.id)}">${escapeHtml((s.seat + ' ' + s.name).trim())}</option>`).join('');
   $('#filter-student').value = [...$('#filter-student').options].some(o => o.value === selected) ? selected : '';
   renderScores();
+  protectTeacherActions();
 }
 function filteredRecords() {
   const student = $('#filter-student').value, language = $('#filter-language').value, duration = Number($('#filter-duration').value);
   return data.testRecords.filter(r => (!student || (student === 'guest' ? r.studentId === null : r.studentId === student)) && (!language || r.language === language) && (!duration || r.duration === duration)).sort((a,b) => b.createdAt.localeCompare(a.createdAt));
 }
 function renderScores() {
+  if (!teacherIsActive()) return;
   const records = filteredRecords(), ids = new Set(data.students.map(s => s.id));
   const classroom = records.filter(r => ids.has(r.studentId));
   const avg = (rows,k) => rows.length ? Math.round(rows.reduce((sum,r) => sum + r[k],0) / rows.length) : '--';
@@ -362,6 +366,7 @@ function renderScores() {
     return `<tr><td>${escapeHtml((s.seat + ' ' + s.name).trim())}</td><td>${best('en')}</td><td>${best('zh')}</td><td>${last ? `${last.speed} ${last.unit} · ${last.accuracy}% · ${formatDate(last.createdAt)}` : '--'}</td></tr>`;
   });
   $('#student-summary').innerHTML = `<div class="record-wrap"><table class="record"><caption>每位學生最佳與最近成績（依目前篩選，未套用排行正確率門檻）</caption><thead><tr><th>學生</th><th>最佳英文</th><th>最佳中文</th><th>最近成績</th></tr></thead><tbody>${studentRows.join('')}</tbody></table></div>`;
+  protectTeacherActions();
 }
 $('#save-roster').onclick = () => {
   try {const added = mergeRoster(pendingRoster || parseRoster($('#roster-input').value)); pendingRoster = null; $('#roster-input').value = ''; save(); renderTeacher(); toast(`新增 ${added} 位學生，已略過相同座號與姓名。`);}
@@ -419,4 +424,4 @@ if (storageIssue) {
 }
 $$('.shift-reference').forEach(el => {el.innerHTML = shiftReferenceHTML();});
 setSelected('#lang','en'); setSelected('#duration','60');
-fillStudents(); stats(); renderLessons(); renderTeacher();
+fillStudents(); stats(); renderLessons(); protectTeacherActions();

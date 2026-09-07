@@ -1,0 +1,82 @@
+'use strict';
+let teacherSession = {authenticated:false,expiresAt:0};
+let teacherExpiryTimer;
+const loginDialog = document.querySelector('#teacher-login');
+const loginMessage = document.querySelector('#teacher-login-message');
+async function teacherRequest(body) {
+  const response = await fetch('/api/teacher',{
+    method:body ? 'POST' : 'GET',credentials:'same-origin',cache:'no-store',
+    headers:body ? {'Content-Type':'application/json'} : {},
+    ...(body ? {body:JSON.stringify(body)} : {}),signal:AbortSignal.timeout(12000)
+  });
+  const result = await response.json().catch(() => null);
+  if (!response.ok || !result) throw Error(result?.error || '目前無法連線至教師登入服務，請使用正式網站稍後再試。');
+  return result;
+}
+function teacherIsActive() {return teacherSession.authenticated && teacherSession.expiresAt > Date.now();}
+function setTeacherSession(session) {
+  teacherSession = session;
+  clearTimeout(teacherExpiryTimer);
+  if (teacherIsActive()) teacherExpiryTimer = setTimeout(() => {
+    lockTeacher(); toast('教師登入已到期，請重新登入。');
+  },Math.max(0,session.expiresAt - Date.now()));
+}
+function lockTeacher() {
+  setTeacherSession({authenticated:false,expiresAt:0});
+  document.querySelector('#teacher-password').value = '';
+  if (document.querySelector('#teacher').classList.contains('active')) show('overview');
+}
+function showTeacherLogin(message = '') {
+  lockTeacher();
+  loginMessage.textContent = message;
+  if (!loginDialog.open) loginDialog.showModal();
+  document.querySelector('#teacher-password').focus();
+}
+async function openTeacher() {
+  try {
+    const session = await teacherRequest();
+    if (!session.authenticated) return showTeacherLogin();
+    setTeacherSession(session); show('teacher',true);
+  } catch (error) {showTeacherLogin(error.message);}
+}
+// Every teacher action rechecks the signed server session, including across tabs.
+function protectTeacherActions() {
+  document.querySelectorAll('#teacher button, #teacher input, #teacher select').forEach(el => {
+    if (el.id === 'teacher-logout') return;
+    for (const property of ['onclick','onchange']) {
+      const original = el[property];
+      if (!original || original.teacherProtected) continue;
+      const guarded = async function(event) {
+        event.preventDefault();
+        try {
+          const session = await teacherRequest();
+          if (!session.authenticated) return showTeacherLogin('請先登入教師端再操作。');
+          setTeacherSession(session);
+          return await original.call(this,event);
+        } catch(error) {showTeacherLogin(error.message);}
+      };
+      guarded.teacherProtected = true;
+      el[property] = guarded;
+    }
+  });
+}
+document.querySelector('#teacher-login-form').onsubmit = async event => {
+  event.preventDefault();
+  const button = document.querySelector('#teacher-login-submit');
+  button.disabled = true; loginMessage.textContent = '正在驗證…';
+  try {
+    const session = await teacherRequest({action:'login',password:document.querySelector('#teacher-password').value});
+    document.querySelector('#teacher-password').value = '';
+    setTeacherSession(session); loginDialog.close(); show('teacher',true);
+  } catch(error) {loginMessage.textContent = error.message;}
+  finally {button.disabled = false;}
+};
+document.querySelector('#teacher-login-cancel').onclick = () => loginDialog.close();
+loginDialog.addEventListener('close',() => {document.querySelector('#teacher-password').value = '';});
+document.querySelector('#teacher-logout').onclick = async () => {
+  try {await teacherRequest({action:'logout'}); lockTeacher(); toast('已登出教師端。');}
+  catch(error) {toast('登出未完成，請保持此頁並重試。' + error.message);}
+};
+document.addEventListener('visibilitychange',() => {
+  if (!document.hidden && document.querySelector('#teacher').classList.contains('active')) openTeacher();
+});
