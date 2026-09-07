@@ -18,11 +18,12 @@
 
 ### Git／部署
 
-- 尚未提交、推送或部署。
+- GitHub 功能 commit `0dce8ca` 已推送到 `main`。
+- Vercel Production：`https://typing-practice-room.vercel.app`，已完成部署。
 
 ### 待辦
 
-- 部署後確認正式網站鍵帽直接顯示指法簡碼與方向修正。
+- 已確認正式網站鍵帽直接顯示指法簡碼，`a` 鍵顯示「左小」，左手提示卡同步 active。
 
 ## 2026-09-07｜英文鍵位浮貼手指提示
 
