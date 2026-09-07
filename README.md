@@ -89,6 +89,7 @@ node --check data.js
 
 ## 檔案
 
+- `AGENT_HANDOFF.md`：每次修改後更新的 Agent 交接紀錄、驗證結果與待辦事項
 - `index.html`：頁面與六步新手教學
 - `styles.css`：響應式介面
 - `app.js`：導覽、課程、測速、教師工具

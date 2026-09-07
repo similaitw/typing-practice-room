@@ -17,6 +17,11 @@ let data = load(), lessonId = 'home', tutorialStep = 0, practice = null;
 let test = {lang:'en', duration:60, text:'', started:false, finished:false, timer:null, committed:'', composing:false};
 let activeStudent = '', pendingRoster = null;
 const previousArticles = {};
+$('#overview .hero')?.insertAdjacentHTML('beforebegin', '<figure class="hand-placement homepage-placement"><div class="hand-placement-heading"><div><p class="eyebrow">START HERE / HAND POSITION</p><strong>先看懂鍵盤，再開始練習。</strong></div><a href="assets/hand-placement.svg" target="_blank" rel="noopener">開啟大圖 ↗</a></div><div class="hand-placement-scroll" tabindex="0" role="region" aria-label="首頁鍵盤與手指位置圖"><img src="assets/hand-placement.svg" width="960" height="810" alt="標準 QWERTY 鍵盤與雙手基準位置圖"></div><figcaption>和你低頭看鍵盤的方向相同。先找 F、J 的凸點，兩隻拇指輕放空白鍵。</figcaption></figure>');
+const studentLabel = s => [s.className || '', s.name, s.seat ? s.seat + '號' : ''].filter(Boolean).join(' ｜ ');
+function updateStudentRecords(s) {
+  data.testRecords.filter(r => r.studentId === s.id).forEach(r => {r.studentLabel = studentLabel(s); r.studentClass = s.className || ''; r.studentName = s.name; r.studentSeat = s.seat;});
+}
 const uid = () => globalThis.crypto?.randomUUID?.() || Date.now() + '-' + Math.random().toString(16).slice(2);
 const escapeHtml = v => String(v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const formatDate = v => new Date(v).toLocaleString('zh-TW', {month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
@@ -98,7 +103,12 @@ function paintText(target, value, element) {
     } else if (typed.length) element.scrollTop = element.scrollHeight;
   }
 }
-const keyRows = ['`1234567890-=','qwertyuiop','asdfghjkl;','zxcvbnm,./'];
+const keyRows = [
+  {keys:'`1234567890-=',before:'',after:'Backspace'},
+  {keys:'qwertyuiop[]\\',before:'Tab',after:''},
+  {keys:"asdfghjkl;'",before:'Caps Lock',after:'Enter'},
+  {keys:'zxcvbnm,./',before:'Shift',after:'Shift'}
+];
 const shiftedKeys = Object.fromEntries(SHIFT_PAIRS.map(([key,symbol]) => [symbol,key]));
 const bopomofo = Object.fromEntries(C.chars('1qaz2wsxedcrfv5tgbyhnujm8ik,9ol.0p;/-3467').map((k,i) => [k,C.chars('ㄅㄆㄇㄈㄉㄊㄋㄌㄍㄎㄏㄐㄑㄒㄓㄔㄕㄖㄗㄘㄙㄧㄨㄩㄚㄛㄜㄝㄞㄟㄠㄡㄢㄣㄤㄥㄦˇˋˊ˙')[i]]));
 function fingerFor(key) {
@@ -111,7 +121,9 @@ function shiftReferenceHTML() {
   return `<div class="shift-map" aria-label="數字列上下層符號對照">${SHIFT_PAIRS.map(([key,symbol]) => `<div class="shift-key"><strong>${escapeHtml(symbol)}</strong><span>${escapeHtml(key)}</span></div>`).join('')}</div><p class="shift-caption">上排：按住 Shift 的結果 ／ 下排：直接按鍵的結果。例：Shift + 2 = @。不同語系鍵盤配置可能不同。</p>`;
 }
 function keyboardHTML(l) {
-  return `<div class="virtual-keyboard" aria-label="實體鍵盤與手指對照">${keyRows.map(row => `<div class="keyboard-row">${C.chars(row).map(k => `<span class="keyboard-key" data-key="${k}" title="${k.toUpperCase()}：${fingerFor(k)}${l.group === 'zh' && bopomofo[k] ? '／' + bopomofo[k] : ''}">${l.group === 'en' && SHIFT_PAIRS.some(([key]) => key === k) ? `<small class="shift-symbol">${escapeHtml(SHIFT_PAIRS.find(([key]) => key === k)[1])}</small>` : ''}<b>${k.toUpperCase()}</b>${l.group === 'zh' ? `<small>${bopomofo[k] || ''}</small>` : ''}</span>`).join('')}</div>`).join('')}<div class="keyboard-row"><span class="keyboard-key shift-keycap" data-key="ShiftLeft">左 Shift</span><span class="keyboard-key space-key" data-key=" ">SPACE · 拇指</span><span class="keyboard-key shift-keycap" data-key="ShiftRight">右 Shift</span></div></div>`;
+  const renderKey = k => `<span class="keyboard-key" data-key="${escapeHtml(k)}" title="${escapeHtml(k.toUpperCase())}：${escapeHtml(fingerFor(k))}${l.group === 'zh' && bopomofo[k] ? '／' + bopomofo[k] : ''}">${l.group === 'en' && SHIFT_PAIRS.some(([key]) => key === k) ? `<small class="shift-symbol">${escapeHtml(SHIFT_PAIRS.find(([key]) => key === k)[1])}</small>` : ''}<b>${escapeHtml(k.toUpperCase())}</b>${l.group === 'zh' ? `<small>${escapeHtml(bopomofo[k] || '')}</small>` : ''}</span>`;
+  const modifier = (label, key, width) => `<span class="keyboard-key modifier-key" style="flex:0 0 ${width}px;max-width:none" data-key="${key || ''}">${label}</span>`;
+  return `<div class="virtual-keyboard" aria-label="標準 QWERTY 實體鍵盤與手指對照" style="overflow-x:auto;padding:4px 2px 8px">${keyRows.map((row,i) => `<div class="keyboard-row keyboard-row-${i + 1}" style="min-width:720px;padding-left:${[0,22,34,48][i]}px;padding-right:${[0,0,0,0][i]}px">${row.before ? modifier(row.before, row.before === 'Shift' ? 'ShiftLeft' : '', row.before === 'Shift' ? 112 : 76) : ''}${C.chars(row.keys).map(renderKey).join('')}${row.after ? modifier(row.after, row.after === 'Shift' ? 'ShiftRight' : '', row.after === 'Shift' ? 112 : 86) : ''}</div>`).join('')}<div class="keyboard-row keyboard-row-5" style="min-width:720px;padding:0 105px">${modifier('Ctrl','',58)}${modifier('Win','',58)}${modifier('Alt','',58)}<span class="keyboard-key space-key" data-key=" " style="flex:0 0 220px;max-width:none">SPACE · 拇指</span>${modifier('Alt','',58)}${modifier('Win','',58)}${modifier('Ctrl','',58)}</div></div>`;
 }
 function renderLessons() {
   for (const [group, target] of [['en','#lesson-list'],['zh','#zh-lesson-list']]) {
@@ -224,7 +236,7 @@ function finishTest(measured) {
   $('#test-input').value = test.committed; $('#test-input').disabled = true;
   lockIdentity(false);
   const s = test.studentLabel;
-  const record = {id:uid(),studentId:test.studentId,studentLabel:s ? `${s.seat} ${s.name}`.trim() : '訪客',language:test.language,
+  const record = {id:uid(),studentId:test.studentId,studentLabel:s ? studentLabel(s) : '訪客',studentClass:s?.className || '',studentName:s?.name || '',studentSeat:s?.seat || '',language:test.language,
     source:test.lang === 'custom' ? 'custom' : 'builtin',duration:test.duration,elapsedSeconds:Number(m.elapsed.toFixed(3)),speed:m.speed,
     unit:test.language === 'zh' ? 'CPM' : 'WPM',accuracy:m.accuracy,correctChars:m.correct,errors:m.errors,typedLength:m.typed,
     targetLength:C.chars(test.text).length,createdAt:new Date().toISOString()};
@@ -258,29 +270,30 @@ function lockIdentity(locked) {
 }
 function syncIdentity() {
   const person = data.students.find(s => s.id === activeStudent);
+  $('#player-class').value = person?.className || '';
   $('#player-name').value = person?.name || '';
   $('#player-seat').value = person?.seat || '';
-  $('#identity-status').textContent = person ? `目前練習者：${(person.seat + ' ' + person.name).trim()}。完成測速且達到正確率門檻，即可列入排行榜。` : '目前為訪客，成績不列入排行榜。';
+  $('#identity-status').textContent = person ? `目前練習者：${studentLabel(person)}。完成測速且達到正確率門檻，即可列入排行榜。` : '目前為訪客，成績不列入排行榜。';
 }
 $('#join-ranking').onsubmit = e => {
   e.preventDefault();
   if (test.started && !test.finished) return;
+  const className = $('#player-class').value.trim();
   const name = $('#player-name').value.trim();
   let seat = $('#player-seat').value.trim();
-  if (!name || name.length > 80 || seat.length > 20 || /[\r\n\t]/.test(name + seat)) {
-    $('#identity-status').textContent = '請輸入有效姓名（最多 80 字）與座號（最多 20 字）。';
+  if (!className || className.length > 40 || !name || name.length > 80 || !/^\d{1,3}$/.test(seat) || Number(seat) < 1 || /[\r\n\t]/.test(className + name)) {
+    $('#identity-status').textContent = '請填寫班級、姓名與有效座號（1–999）。班級最多 40 字、姓名最多 80 字。';
     return;
   }
-  if (/^\d+$/.test(seat)) seat = seat.padStart(2,'0');
-  let person = data.students.find(s => s.name === name && s.seat === seat);
-  if (!person && !seat) {
-    const matches = data.students.filter(s => s.name === name);
-    if (matches.length > 1) {$('#identity-status').textContent = '名單有多位同名練習者，請填座號或從下方名單選擇。'; return;}
-    person = matches[0];
+  seat = seat.padStart(2,'0');
+  let person = data.students.find(s => (s.className || '') === className && s.name === name && s.seat === seat);
+  const previous = data.students.find(s => s.id === activeStudent);
+  if (!person && previous && !previous.className && previous.name === name && previous.seat === seat) {
+    person = previous; person.className = className; updateStudentRecords(person); save();
   }
   if (!person) {
     if (data.students.length >= 2000) {$('#identity-status').textContent = '名單已達 2,000 人上限，請從已有名單選擇。'; return;}
-    person = {id:uid(),seat,name,createdAt:new Date().toISOString()};
+    person = {id:uid(),className,seat,name,createdAt:new Date().toISOString()};
     data.students.push(person); save();
   }
   activeStudent = person.id; fillStudents(); stats(); resetTest(); renderPlayerRanking();
@@ -296,12 +309,17 @@ $('#player-ranking-language').onchange = renderPlayerRanking;
 document.addEventListener('keydown', e => {if (e.ctrlKey && e.key === 'Enter' && $('#test').classList.contains('active')) {e.preventDefault(); resetTest(); $('#test-input').focus();}});
 function fillStudents() {
   if (!data.students.some(s => s.id === activeStudent)) activeStudent = '';
-  $('#student-select').innerHTML = '<option value="">訪客模式（不列入排行榜）</option>' + data.students.map(s => `<option value="${escapeHtml(s.id)}">${escapeHtml((s.seat + ' ' + s.name).trim())}</option>`).join('');
+  $('#student-select').innerHTML = '<option value="">訪客模式（不列入排行榜）</option>' + data.students.map(s => `<option value="${escapeHtml(s.id)}">${escapeHtml(studentLabel(s))}</option>`).join('');
   $('#student-select').value = activeStudent;
   syncIdentity();
 }
 function parseRoster(raw) {
   return raw.split(/\r?\n/).map(x => x.trim()).filter(Boolean).map(line => {
+    const full = line.match(/^(\S+)\s+(\d+)\s+(.+)$/);
+    if (full) {
+      if (full[1].length > 40 || full[2].length > 20 || full[3].length > 80) throw Error('班級、姓名或座號過長。');
+      return {className:full[1],seat:full[2].padStart(2,'0'),name:full[3].trim()};
+    }
     const m = line.match(/^(\d+)\s+(.+)$/);
     const seat = m ? m[1].padStart(2,'0') : '', name = (m ? m[2] : line).trim();
     if (name.length > 80 || seat.length > 20) throw Error('姓名最多 80 字、座號最多 20 字。');
@@ -312,7 +330,7 @@ function mergeRoster(entries) {
   if (entries.length + data.students.length > 2000) throw Error('學生名單最多 2000 位。');
   let added = 0;
   for (const entry of entries) {
-    if (!data.students.some(s => s.seat === entry.seat && s.name === entry.name)) {
+    if (!data.students.some(s => (s.className || '') === (entry.className || '') && s.seat === entry.seat && s.name === entry.name)) {
       data.students.push({...entry,id:uid(),createdAt:new Date().toISOString()}); added++;
     }
   }
@@ -322,15 +340,16 @@ function renderTeacher() {
   if (!teacherIsActive()) return;
   fillStudents();
   $('#student-count').textContent = `${data.students.length} 人`;
-  $('#student-list').innerHTML = data.students.length ? data.students.map((s,i) => `<div class="student"><span><small>${escapeHtml(s.seat)}</small>${escapeHtml(s.name)}</span><div class="actions"><button data-edit="${i}" aria-label="編輯 ${escapeHtml(s.name)}">編輯</button><button data-remove="${i}" aria-label="刪除 ${escapeHtml(s.name)}">刪除</button></div></div>`).join('') : '<div class="empty">還沒有學生名單。</div>';
+  $('#student-list').innerHTML = data.students.length ? data.students.map((s,i) => `<div class="student"><span><small>${escapeHtml(s.className || '未填班級')}</small>${escapeHtml(s.name)} ${escapeHtml(s.seat ? s.seat + '號' : '')}</span><div class="actions"><button data-edit="${i}" aria-label="編輯 ${escapeHtml(s.name)}">編輯</button><button data-remove="${i}" aria-label="刪除 ${escapeHtml(s.name)}">刪除</button></div></div>`).join('') : '<div class="empty">還沒有學生名單。</div>';
   $$('[data-edit]').forEach(b => b.onclick = () => {
     const s = data.students[Number(b.dataset.edit)];
+    const className = prompt('修改班級（舊資料可留空）',s.className || ''); if (className === null) return;
     const seat = prompt('修改座號（可留空）',s.seat); if (seat === null) return;
     const name = prompt('修改姓名',s.name); if (name === null) return;
-    if (!name.trim() || name.trim().length > 80 || seat.trim().length > 20 || /[\r\n]/.test(name + seat)) return toast('姓名或座號格式不正確。');
-    if (data.students.some(other => other.id !== s.id && other.name === name.trim() && other.seat === seat.trim())) return toast('已有相同座號與姓名的學生。');
-    s.seat = seat.trim(); s.name = name.trim();
-    data.testRecords.filter(r => r.studentId === s.id).forEach(r => {r.studentLabel = `${s.seat} ${s.name}`.trim();});
+    if (className.trim().length > 40 || !name.trim() || name.trim().length > 80 || seat.trim().length > 20 || /[\r\n\t]/.test(className + name + seat)) return toast('姓名或座號格式不正確。');
+    if (data.students.some(other => other.id !== s.id && (other.className || '') === className.trim() && other.name === name.trim() && other.seat === seat.trim())) return toast('已有相同班級、姓名與座號的學生。');
+    s.className = className.trim(); s.seat = seat.trim(); s.name = name.trim();
+    updateStudentRecords(s);
     save(); renderTeacher(); stats();
   });
   $$('[data-remove]').forEach(b => b.onclick = () => {
@@ -339,7 +358,7 @@ function renderTeacher() {
     data.students = data.students.filter(x => x.id !== s.id); save(); renderTeacher(); stats();
   });
   const selected = $('#filter-student').value;
-  $('#filter-student').innerHTML = '<option value="">全部學生與訪客</option><option value="guest">訪客</option>' + data.students.map(s => `<option value="${escapeHtml(s.id)}">${escapeHtml((s.seat + ' ' + s.name).trim())}</option>`).join('');
+  $('#filter-student').innerHTML = '<option value="">全部學生與訪客</option><option value="guest">訪客</option>' + data.students.map(s => `<option value="${escapeHtml(s.id)}">${escapeHtml(studentLabel(s))}</option>`).join('');
   $('#filter-student').value = [...$('#filter-student').options].some(o => o.value === selected) ? selected : '';
   renderScores();
   protectTeacherActions();
@@ -363,13 +382,13 @@ function renderScores() {
     const own = records.filter(r => r.studentId === s.id);
     const best = language => {const r = own.filter(r => r.language === language).sort(C.compareScores)[0]; return r ? `${r.speed} ${r.unit}` : '--';};
     const last = own[0];
-    return `<tr><td>${escapeHtml((s.seat + ' ' + s.name).trim())}</td><td>${best('en')}</td><td>${best('zh')}</td><td>${last ? `${last.speed} ${last.unit} · ${last.accuracy}% · ${formatDate(last.createdAt)}` : '--'}</td></tr>`;
+    return `<tr><td>${escapeHtml(studentLabel(s))}</td><td>${best('en')}</td><td>${best('zh')}</td><td>${last ? `${last.speed} ${last.unit} · ${last.accuracy}% · ${formatDate(last.createdAt)}` : '--'}</td></tr>`;
   });
   $('#student-summary').innerHTML = `<div class="record-wrap"><table class="record"><caption>每位學生最佳與最近成績（依目前篩選，未套用排行正確率門檻）</caption><thead><tr><th>學生</th><th>最佳英文</th><th>最佳中文</th><th>最近成績</th></tr></thead><tbody>${studentRows.join('')}</tbody></table></div>`;
   protectTeacherActions();
 }
 $('#save-roster').onclick = () => {
-  try {const added = mergeRoster(pendingRoster || parseRoster($('#roster-input').value)); pendingRoster = null; $('#roster-input').value = ''; save(); renderTeacher(); toast(`新增 ${added} 位學生，已略過相同座號與姓名。`);}
+  try {const added = mergeRoster(pendingRoster || parseRoster($('#roster-input').value)); pendingRoster = null; $('#roster-input').value = ''; save(); renderTeacher(); toast(`新增 ${added} 位學生，已略過相同班級、姓名與座號。`);}
   catch (e) {toast(e.message);}
 };
 $('#roster-input').oninput = () => {pendingRoster = null;};
@@ -384,7 +403,7 @@ function download(name, content, type) {
 }
 $('#export-json').onclick = () => download('typing-practice-room-backup.json',JSON.stringify(data,null,2),'application/json;charset=utf-8');
 function exportCSV() {
-  const rows = [['學生','語言','速度','單位','正確率','正確字元','錯誤','設定秒數','實際秒數','日期'],...filteredRecords().map(r => [r.studentLabel,r.language === 'zh' ? '中文' : '英文',r.speed,r.unit,r.accuracy,r.correctChars,r.errors,r.duration,r.elapsedSeconds,r.createdAt])];
+  const rows = [['班級','姓名','座號','學生','語言','速度','單位','正確率','正確字元','錯誤','設定秒數','實際秒數','日期'],...filteredRecords().map(r => [r.studentClass ?? data.students.find(s => s.id === r.studentId)?.className ?? '',r.studentName ?? data.students.find(s => s.id === r.studentId)?.name ?? '',r.studentSeat ?? data.students.find(s => s.id === r.studentId)?.seat ?? '',r.studentLabel,r.language === 'zh' ? '中文' : '英文',r.speed,r.unit,r.accuracy,r.correctChars,r.errors,r.duration,r.elapsedSeconds,r.createdAt])];
   download('typing-practice-room-records.csv','\uFEFF' + rows.map(row => row.map(C.csvCell).join(',')).join('\r\n'),'text/csv;charset=utf-8');
 }
 $('#export-csv').onclick = exportCSV;
@@ -394,7 +413,7 @@ async function readImport(input, maxBytes, extension) {
   return file.text();
 }
 $('#csv-input').onchange = async e => {
-  try {const text = await readImport(e.target,1024 * 1024,'.csv'); if (text === null) return; const entries = C.rosterCSV(text); if (entries.length > 2000) throw Error('名單最多 2000 位。'); pendingRoster = entries; $('#roster-input').value = entries.map(s => `${s.seat} ${s.name}`.trim()).join('\n'); toast('CSV 已讀取，請確認名單再按「儲存名單」。');}
+  try {const text = await readImport(e.target,1024 * 1024,'.csv'); if (text === null) return; const entries = C.rosterCSV(text); if (entries.length > 2000) throw Error('名單最多 2000 位。'); pendingRoster = entries; $('#roster-input').value = entries.map(s => `${s.className || ''} ${s.seat} ${s.name}`.trim()).join('\n'); toast('CSV 已讀取，請確認名單再按「儲存名單」。');}
   catch (error) {toast(error.message);} finally {e.target.value = '';}
 };
 $('#json-input').onchange = async e => {

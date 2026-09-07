@@ -53,12 +53,18 @@ const TypingCore = (() => {
   }
   function rosterCSV(text) {
     const rows = parseCSV(text), header = rows.shift()?.map(s => s.trim());
-    const name = header?.indexOf('姓名'), seat = header?.indexOf('座號');
+    const name = header?.indexOf('姓名'), seat = header?.indexOf('座號'), classColumn = header?.indexOf('班級');
     if (name == null || name < 0 || seat < 0) throw Error('CSV 首列必須包含「座號、姓名」。');
     return rows.map(row => {
       const n = (row[name] || '').trim(), s = (row[seat] || '').trim();
       if (!n || n.length > 80 || s.length > 20 || /[\r\n]/.test(n + s)) throw Error('姓名或座號格式不正確。');
-      return {seat: /^\d+$/.test(s) ? s.padStart(2, '0') : s, name: n};
+      const entry = {seat: /^\d+$/.test(s) ? s.padStart(2, '0') : s, name: n};
+      if (classColumn >= 0) {
+        const className = (row[classColumn] || '').trim();
+        if (className.length > 40 || /[\r\n\t]/.test(className)) throw Error('班級最多 40 字，不能包含換行。');
+        entry.className = className;
+      }
+      return entry;
     });
   }
   function csvCell(value) {
@@ -77,13 +83,15 @@ const TypingCore = (() => {
     const result = emptyData(), ids = new Set(), recordIds = new Set();
     for (const s of p.students) {
       if (!s || !validText(s.id, 100) || !s.id || ids.has(s.id) || !validText(s.seat, 20) ||
-          !validText(s.name, 80) || !s.name.trim() || !validDate(s.createdAt)) fail();
+          !validText(s.name, 80) || !s.name.trim() || !validDate(s.createdAt) ||
+          (s.className !== undefined && !validText(s.className,40))) fail();
       ids.add(s.id);
       result.students.push({id:s.id, seat:s.seat, name:s.name, createdAt:new Date(s.createdAt).toISOString()});
+      if (s.className !== undefined) result.students.at(-1).className = s.className;
     }
     for (const r of p.testRecords) {
       if (!r || !validText(r.id, 100) || !r.id || recordIds.has(r.id) ||
-          !(r.studentId === null || validText(r.studentId, 100)) || !validText(r.studentLabel, 120) ||
+          !(r.studentId === null || validText(r.studentId, 100)) || !validText(r.studentLabel, 160) ||
           !['en','zh'].includes(r.language) || !['builtin','custom'].includes(r.source) ||
           ![15,30,60,120].includes(r.duration) || !validDate(r.createdAt) ||
           r.unit !== (r.language === 'en' ? 'WPM' : 'CPM') || !number(r.accuracy,100) ||
@@ -95,6 +103,9 @@ const TypingCore = (() => {
       ['id','studentId','studentLabel','language','source','duration','elapsedSeconds','speed','unit','accuracy',
         'correctChars','errors','typedLength','targetLength'].forEach(k => {clean[k] = r[k];});
       clean.createdAt = new Date(r.createdAt).toISOString();
+      for (const [key,max] of [['studentClass',40],['studentName',80],['studentSeat',20]]) {
+        if (r[key] !== undefined) {if (!validText(r[key],max)) fail(); clean[key] = r[key];}
+      }
       result.testRecords.push(clean);
     }
     for (const [key,value] of Object.entries(p.lessonProgress)) {
