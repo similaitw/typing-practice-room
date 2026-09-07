@@ -21,8 +21,9 @@
 
 ### Git／部署
 
-- 本筆與修正一起提交；接手基準工作區乾淨。
-- 部署後由後續紀錄補充正式站驗證結果。
+- 功能 commit `f0c64b7` 已推送 GitHub main，Vercel Production 已部署。
+- 正式網址：https://typing-practice-room.vercel.app
+- 正式站驗證：未登入查詢回傳 401；使用既有本機憑證登入後，Postgres 查詢回傳 200／陣列，檢查後已登出。未顯示或寫入學生成績。
 
 ### 待辦
 
