@@ -20,11 +20,12 @@
 
 ### Git／部署
 
-- 尚未提交、推送或部署。
+- GitHub 功能 commit `db80a39` 已推送到 `main`。
+- Vercel Production：`https://typing-practice-room.vercel.app`，已完成部署。
 
 ### 待辦
 
-- 部署後確認正式網站英文課程可載入左右手 SVG 素材。
+- 已確認正式網站英文課程可載入左右手 SVG，下一鍵 `a` 顯示左手 active 提示。
 
 ## 2026-09-07｜排行榜獨立頁面
 
