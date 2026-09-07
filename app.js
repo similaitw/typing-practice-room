@@ -147,10 +147,13 @@ function fingerFor(key) {
 function shiftReferenceHTML() {
   return `<div class="shift-map" aria-label="數字列上下層符號對照">${SHIFT_PAIRS.map(([key,symbol]) => `<div class="shift-key"><strong>${escapeHtml(symbol)}</strong><span>${escapeHtml(key)}</span></div>`).join('')}</div><p class="shift-caption">上排：按住 Shift 的結果 ／ 下排：直接按鍵的結果。例：Shift + 2 = @。不同語系鍵盤配置可能不同。</p>`;
 }
+function fingerOverlayHTML() {
+  return `<div class="finger-overlay" aria-live="polite"><div class="finger-card left" id="finger-left"><img src="assets/left-hand.svg" alt="左手指法圖"><div><strong>左手</strong><span id="finger-left-label">準備定位</span></div></div><div class="finger-card target"><span class="finger-target-label">下一個按鍵</span><strong id="finger-target-key">—</strong><span id="finger-target-label">請看提示</span></div><div class="finger-card right" id="finger-right"><img src="assets/right-hand.svg" alt="右手指法圖"><div><strong>右手</strong><span id="finger-right-label">準備定位</span></div></div></div>`;
+}
 function keyboardHTML(l) {
   const renderKey = k => `<span class="keyboard-key" data-key="${escapeHtml(k)}" title="${escapeHtml(k.toUpperCase())}：${escapeHtml(fingerFor(k))}${l.group === 'zh' && bopomofo[k] ? '／' + bopomofo[k] : ''}">${l.group === 'en' && SHIFT_PAIRS.some(([key]) => key === k) ? `<small class="shift-symbol">${escapeHtml(SHIFT_PAIRS.find(([key]) => key === k)[1])}</small>` : ''}<b>${escapeHtml(k.toUpperCase())}</b>${l.group === 'zh' ? `<small>${escapeHtml(bopomofo[k] || '')}</small>` : ''}</span>`;
   const modifier = (label, key, width) => `<span class="keyboard-key modifier-key" style="flex:0 0 ${width}px;max-width:none" data-key="${key || ''}">${label}</span>`;
-  return `<div class="virtual-keyboard" aria-label="標準 QWERTY 實體鍵盤與手指對照" style="overflow-x:auto;padding:4px 2px 8px">${keyRows.map((row,i) => `<div class="keyboard-row keyboard-row-${i + 1}" style="min-width:720px;padding-left:${[0,22,34,48][i]}px;padding-right:${[0,0,0,0][i]}px">${row.before ? modifier(row.before, row.before === 'Shift' ? 'ShiftLeft' : '', row.before === 'Shift' ? 112 : 76) : ''}${C.chars(row.keys).map(renderKey).join('')}${row.after ? modifier(row.after, row.after === 'Shift' ? 'ShiftRight' : '', row.after === 'Shift' ? 112 : 86) : ''}</div>`).join('')}<div class="keyboard-row keyboard-row-5" style="min-width:720px;padding:0 105px">${modifier('Ctrl','',58)}${modifier('Win','',58)}${modifier('Alt','',58)}<span class="keyboard-key space-key" data-key=" " style="flex:0 0 220px;max-width:none">SPACE · 拇指</span>${modifier('Alt','',58)}${modifier('Win','',58)}${modifier('Ctrl','',58)}</div></div>`;
+  return `${l.group === 'en' ? fingerOverlayHTML() : ''}<div class="virtual-keyboard" aria-label="標準 QWERTY 實體鍵盤與手指對照" style="overflow-x:auto;padding:4px 2px 8px">${keyRows.map((row,i) => `<div class="keyboard-row keyboard-row-${i + 1}" style="min-width:720px;padding-left:${[0,22,34,48][i]}px;padding-right:${[0,0,0,0][i]}px">${row.before ? modifier(row.before, row.before === 'Shift' ? 'ShiftLeft' : '', row.before === 'Shift' ? 112 : 76) : ''}${C.chars(row.keys).map(renderKey).join('')}${row.after ? modifier(row.after, row.after === 'Shift' ? 'ShiftRight' : '', row.after === 'Shift' ? 112 : 86) : ''}</div>`).join('')}<div class="keyboard-row keyboard-row-5" style="min-width:720px;padding:0 105px">${modifier('Ctrl','',58)}${modifier('Win','',58)}${modifier('Alt','',58)}<span class="keyboard-key space-key" data-key=" " style="flex:0 0 220px;max-width:none">SPACE · 拇指</span>${modifier('Alt','',58)}${modifier('Win','',58)}${modifier('Ctrl','',58)}</div></div>`;
 }
 function renderLessons() {
   for (const [group, target] of [['en','#lesson-list'],['zh','#zh-lesson-list']]) {
@@ -182,7 +185,17 @@ function renderLessonDetail() {
     const needsShift = l.group === 'en' && (Object.hasOwn(shiftedKeys,next) || /^[A-Z]$/.test(next || ''));
     const shiftSide = physical && fingerFor(physical).startsWith('左') ? 'Right' : 'Left';
     $$('.keyboard-key').forEach(k => k.classList.toggle('key-current', !!physical && (k.dataset.key === physical.toLowerCase() || needsShift && k.dataset.key === 'Shift' + shiftSide)));
-    $('#finger-hint').textContent = next ? `下一字：${next === ' ' ? '空格' : next} ｜ ${physical ? fingerFor(physical) : l.fingers}${physical && (l.rawKeys || needsShift) ? ' ｜ 按鍵 ' + physical.toUpperCase() : ''}${needsShift ? ` ＋ ${shiftSide === 'Right' ? '右' : '左'}手小指按住 ${shiftSide === 'Right' ? '右' : '左'} Shift` : ''}` : '已輸入到最後，檢查錯字後完成本課。';
+    const fingerText = physical ? fingerFor(physical) : l.fingers;
+    $('#finger-hint').textContent = next ? `下一字：${next === ' ' ? '空格' : next} ｜ ${fingerText}${physical && (l.rawKeys || needsShift) ? ' ｜ 按鍵 ' + physical.toUpperCase() : ''}${needsShift ? ` ＋ ${shiftSide === 'Right' ? '右' : '左'}手小指按住 ${shiftSide === 'Right' ? '右' : '左'} Shift` : ''}` : '已輸入到最後，檢查錯字後完成本課。';
+    if (l.group === 'en') {
+      const hand = fingerText.startsWith('左') ? 'left' : fingerText.startsWith('右') ? 'right' : '';
+      $('#finger-left').classList.toggle('is-active', hand === 'left');
+      $('#finger-right').classList.toggle('is-active', hand === 'right');
+      $('#finger-left-label').textContent = hand === 'left' ? fingerText : '等待左手';
+      $('#finger-right-label').textContent = needsShift && shiftSide === 'Right' ? '右手小指按 Shift' : hand === 'right' ? fingerText : '等待右手';
+      $('#finger-target-key').textContent = next ? (next === ' ' ? 'SPACE' : next) : '完成';
+      $('#finger-target-label').textContent = needsShift ? `${shiftSide === 'Right' ? '右' : '左'}手小指 + Shift` : fingerText;
+    }
     $('#complete-lesson').disabled = m.typed !== C.chars(l.text).length || m.accuracy < 90;
   };
   input.addEventListener('compositionstart', () => {practice.composing = true;});
