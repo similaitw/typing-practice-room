@@ -2,6 +2,7 @@
 
 const crypto = require('node:crypto');
 const {neon} = require('@neondatabase/serverless');
+const {readCredentials} = require('../lib/teacher-credentials');
 const COOKIE = '__Host-typing-teacher';
 const TTL = 4 * 60 * 60;
 const digest = value => crypto.createHash('sha256').update(value).digest();
@@ -63,7 +64,10 @@ module.exports = async function handler(req, res) {
     } catch (error) {return res.status(502).json({error: error.message || '雲端資料服務目前無法使用。'});}
   }
   if (req.method !== 'GET') {res.setHeader('Allow', 'GET, POST'); return res.status(405).json({error: '不支援此操作。'});}
-  if (!sessionValid(req.headers.cookie, settings.secret, settings.password)) return res.status(401).json({error: '請先登入教師端。'});
+  let credentials;
+  try {credentials = await readCredentials();}
+  catch {return res.status(503).json({error:'目前無法讀取教師登入設定，請稍後再試。'});}
+  if (!sessionValid(req.headers.cookie, settings.secret, credentials.sessionKey)) return res.status(401).json({error: '請先登入教師端。'});
   const query = new URL(req.url, `https://${req.headers.host}`).searchParams;
   const studentId = query.get('studentId'), language = ['en', 'zh'].includes(query.get('language')) ? query.get('language') : null;
   const duration = [15, 30, 60, 120].includes(Number(query.get('duration'))) ? Number(query.get('duration')) : null;

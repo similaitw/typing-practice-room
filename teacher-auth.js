@@ -24,6 +24,8 @@ function setTeacherSession(session) {
 function lockTeacher() {
   setTeacherSession({authenticated:false,expiresAt:0});
   document.querySelector('#teacher-password').value = '';
+  document.querySelector('#teacher-change-password').reset();
+  document.querySelector('#teacher-change-message').textContent = '';
   if (document.querySelector('#teacher').classList.contains('active')) show('overview');
 }
 function showTeacherLogin(message = '') {
@@ -76,6 +78,22 @@ loginDialog.addEventListener('close',() => {document.querySelector('#teacher-pas
 document.querySelector('#teacher-logout').onclick = async () => {
   try {await teacherRequest({action:'logout'}); lockTeacher(); toast('已登出教師端。');}
   catch(error) {toast('登出未完成，請保持此頁並重試。' + error.message);}
+};
+document.querySelector('#teacher-change-password').onsubmit = async event => {
+  event.preventDefault();
+  const form = event.currentTarget, button = document.querySelector('#teacher-change-submit');
+  const message = document.querySelector('#teacher-change-message');
+  const newPassword = document.querySelector('#teacher-new-password').value;
+  const confirmPassword = document.querySelector('#teacher-confirm-password').value;
+  if (newPassword !== confirmPassword) {message.textContent = '兩次輸入的新密碼不一致。'; return;}
+  button.disabled = true; message.textContent = '正在更新密碼…';
+  try {
+    const result = await teacherRequest({action:'change-password',currentPassword:document.querySelector('#teacher-current-password').value,newPassword,confirmPassword});
+    if (!result.passwordChanged) throw Error('未收到密碼更新確認，請稍後再試。');
+    form.reset();
+    showTeacherLogin('密碼已更新，請使用新密碼重新登入。');
+  } catch(error) {message.textContent = error.message;}
+  finally {button.disabled = false;}
 };
 document.addEventListener('visibilitychange',() => {
   if (!document.hidden && document.querySelector('#teacher').classList.contains('active')) openTeacher();

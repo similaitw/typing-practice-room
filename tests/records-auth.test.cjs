@@ -19,6 +19,7 @@ test('cloud query accepts the session issued by teacher login and rejects tamper
     const context=vm.createContext({module:{exports:{}},require:name=>{
       if(name==='node:crypto')return crypto;
       if(name==='@neondatabase/serverless')return {neon:()=>async()=>{queries++;return [];}};
+      if(name==='../lib/teacher-credentials')return {readCredentials:async()=>({sessionKey:password})};
       throw Error('Unexpected dependency');
     },Buffer,URL,process:{env:{TEACHER_PASSWORD:password,TEACHER_SESSION_SECRET:secret,POSTGRES_URL:'test-only-database'}}});
     vm.runInContext(fs.readFileSync(path.join(__dirname,'../api/records.js'),'utf8'),context);

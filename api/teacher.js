@@ -1,4 +1,5 @@
 const crypto = require('node:crypto');
+const {readCredentials,verifyPassword,replacePassword} = require('../lib/teacher-credentials');
 
 const COOKIE = '__Host-typing-teacher';
 const TTL = 4 * 60 * 60;
@@ -24,12 +25,15 @@ module.exports = async function handler(req,res) {
   res.setHeader('Cache-Control','no-store');
   res.setHeader('X-Content-Type-Options','nosniff');
   const send = (status,body) => res.status(status).json(body);
-  const password = process.env.TEACHER_PASSWORD;
   const secret = process.env.TEACHER_SESSION_SECRET;
-  if (!password || password.length < 12 || !secret || secret.length < 32) return send(503,{error:'教師登入尚未設定，請聯絡網站管理者。'});
+  if (!secret || secret.length < 32) return send(503,{error:'教師登入尚未設定，請聯絡網站管理者。'});
+  let credentials;
+  try {credentials = await readCredentials();}
+  catch {return send(503,{error:'目前無法讀取教師密碼設定，請稍後再試。'});}
+  const password = credentials.sessionKey;
   if (req.method === 'GET') {
     const session = readSession(req.headers.cookie,secret,password);
-    return send(200,{authenticated:!!session,expiresAt:session ? session.exp * 1000 : null});
+    return send(200,{authenticated:!!session,expiresAt:session ? session.exp * 1000 : null,...(session ? {canChangePassword:credentials.canChange} : {})});
   }
   if (req.method !== 'POST') {res.setHeader('Allow','GET, POST'); return send(405,{error:'不支援此操作。'});}
   // Require browser requests from this site's own origin; no permissive CORS.
@@ -46,8 +50,24 @@ module.exports = async function handler(req,res) {
     res.setHeader('Set-Cookie',`${COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0`);
     return send(200,{authenticated:false});
   }
+  if (body?.action === 'change-password') {
+    if (!readSession(req.headers.cookie,secret,password)) return send(401,{error:'登入已到期，請重新登入教師端。'});
+    if (!credentials.canChange) return send(503,{error:'尚未設定密碼儲存服務，請聯絡網站管理者。'});
+    if (typeof body.newPassword !== 'string' || body.newPassword.length < 12 || body.newPassword.length > 128 || !body.newPassword.trim()) return send(400,{error:'新密碼需為 12–128 字元。'});
+    if (body.newPassword !== body.confirmPassword) return send(400,{error:'兩次輸入的新密碼不一致。'});
+    if (!await verifyPassword(body.currentPassword,credentials)) {
+      await new Promise(resolve => setTimeout(resolve,500));
+      return send(403,{error:'目前密碼不正確，未變更密碼。'});
+    }
+    if (await verifyPassword(body.newPassword,credentials)) return send(400,{error:'新密碼不能與目前密碼相同。'});
+    try {
+      if (!await replacePassword(credentials,body.newPassword)) return send(409,{error:'密碼已在其他地方更新，請重新登入。'});
+    } catch {return send(503,{error:'密碼更新失敗，請稍後再試。'});}
+    res.setHeader('Set-Cookie',`${COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0`);
+    return send(200,{authenticated:false,passwordChanged:true});
+  }
   if (body?.action !== 'login' || typeof body.password !== 'string' || body.password.length > 256) return send(400,{error:'請輸入教師密碼。'});
-  if (!equal(body.password,password)) {
+  if (!await verifyPassword(body.password,credentials)) {
     // A fixed minimum delay slows naive retries without retaining user/IP data.
     await new Promise(resolve => setTimeout(resolve,500));
     return send(401,{error:'密碼不正確，請再試一次。'});
