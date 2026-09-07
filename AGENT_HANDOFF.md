@@ -2,6 +2,29 @@
 
 > 工作區規則：每次修改網站程式、樣式、資料或部署設定後，必須在本檔新增一筆紀錄。紀錄要包含日期、修改內容、驗證方式、Git 狀態與尚未完成事項，方便切換 Agent 後快速接手。
 
+## 2026-09-07｜排行榜獨立頁面
+
+### 修改
+
+- `index.html`：主導覽新增「排行榜」入口。
+- `app.js`：將既有 `player-ranking` 區塊從測速頁移到主頁層級，獨立成可切換的 view；保留語言切換、目前練習者標示、正確率門檻與既有排名資料來源。
+- `styles.css`：補上獨立排行榜頁面桌面／手機版樣式。
+
+### 驗證
+
+- `node --check app.js`：通過。
+- `node --test tests/core.test.cjs tests/teacher-auth.test.cjs`：10 tests passed, 0 failed。
+- 瀏覽器確認排行榜導覽可切換，主內容只顯示 `player-ranking`。
+- 360px 檢查：`scrollWidth` 345，小於 viewport 360，無橫向溢出。
+
+### Git／部署
+
+- 尚未提交、推送或部署。
+
+### 待辦
+
+- 發布前確認正式網站的排行榜入口與雲端成績查詢仍可使用。
+
 ## 2026-09-07｜Supabase 改用 Vercel Postgres
 
 ### 修改

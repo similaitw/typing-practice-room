@@ -17,6 +17,11 @@ let data = load(), lessonId = 'home', tutorialStep = 0, practice = null;
 let test = {lang:'en', duration:60, text:'', started:false, finished:false, timer:null, committed:'', composing:false};
 let activeStudent = '', pendingRoster = null;
 const previousArticles = {};
+const rankingPage = $('#player-ranking');
+if (rankingPage) {
+  rankingPage.classList.add('view');
+  $('#test').after(rankingPage);
+}
 $('#overview .hero')?.insertAdjacentHTML('beforebegin', '<figure class="hand-placement homepage-placement"><div class="hand-placement-heading"><div><p class="eyebrow">START HERE / HAND POSITION</p><strong>先看懂鍵盤，再開始練習。</strong></div><a href="assets/hand-placement.svg" target="_blank" rel="noopener">開啟大圖 ↗</a></div><div class="hand-placement-scroll" tabindex="0" role="region" aria-label="首頁鍵盤與手指位置圖"><img src="assets/hand-placement.svg" width="960" height="810" alt="標準 QWERTY 鍵盤與雙手基準位置圖"></div><figcaption>和你低頭看鍵盤的方向相同。先找 F、J 的凸點，兩隻拇指輕放空白鍵。</figcaption></figure>');
 const studentLabel = s => [s.className || '', s.name, s.seat ? s.seat + '號' : ''].filter(Boolean).join(' ｜ ');
 function updateStudentRecords(s) {
@@ -65,11 +70,12 @@ function show(view, teacherVerified = false) {
   $$('.nav').forEach(x => {x.classList.toggle('active', x.dataset.view === view); x.setAttribute('aria-current', x.dataset.view === view ? 'page' : 'false');});
   if (view === 'lessons') renderLessons();
   if (view === 'test') {fillStudents(); resetTest(); renderPlayerRanking();}
+  if (view === 'player-ranking') {fillStudents(); renderPlayerRanking();}
   if (view === 'teacher') renderTeacher();
   if (view === 'overview') stats();
   window.scrollTo({top:0, behavior:matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth'});
-  const title = document.querySelector('#' + view + ' h1');
-  title.tabIndex = -1; title.focus({preventScroll:true});
+  const title = document.querySelector('#' + view + ' h1, #' + view + ' h2');
+  if (title) {title.tabIndex = -1; title.focus({preventScroll:true});}
 }
 $$('[data-view]').forEach(el => el.addEventListener('click', e => {
   e.preventDefault();
@@ -270,7 +276,7 @@ function finishTest(measured) {
   $('#again').onclick = () => {resetTest(); $('#test-input').focus();};
   const rankingButton = document.createElement('button');
   rankingButton.className = 'btn'; rankingButton.textContent = '查看排行榜 ↓';
-  rankingButton.onclick = () => {$('#player-ranking-title').focus(); $('#player-ranking').scrollIntoView({block:'start'});};
+  rankingButton.onclick = () => show('player-ranking');
   panel.append(rankingButton);
   panel.querySelector('h2').focus();
 }
