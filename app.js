@@ -144,6 +144,10 @@ function fingerFor(key) {
   if (key === '=') return '右手小指';
   return key === ' ' ? '拇指按空白鍵' : groups.find(([keys]) => keys.includes(key.toLowerCase()))?.[1] || '請使用自己的輸入法選字／標點配置';
 }
+function fingerCode(key) {
+  const label = fingerFor(key);
+  return label.startsWith('左手') ? '左' + label.slice(2, 3) : label.startsWith('右手') ? '右' + label.slice(2, 3) : '';
+}
 function shiftReferenceHTML() {
   return `<div class="shift-map" aria-label="數字列上下層符號對照">${SHIFT_PAIRS.map(([key,symbol]) => `<div class="shift-key"><strong>${escapeHtml(symbol)}</strong><span>${escapeHtml(key)}</span></div>`).join('')}</div><p class="shift-caption">上排：按住 Shift 的結果 ／ 下排：直接按鍵的結果。例：Shift + 2 = @。不同語系鍵盤配置可能不同。</p>`;
 }
@@ -151,7 +155,7 @@ function fingerOverlayHTML() {
   return `<div class="finger-overlay" aria-live="polite"><div class="finger-card left" id="finger-left"><img src="assets/left-hand.svg" alt="左手指法圖"><div><strong>左手</strong><span id="finger-left-label">準備定位</span></div></div><div class="finger-card target"><span class="finger-target-label">下一個按鍵</span><strong id="finger-target-key">—</strong><span id="finger-target-label">請看提示</span></div><div class="finger-card right" id="finger-right"><img src="assets/right-hand.svg" alt="右手指法圖"><div><strong>右手</strong><span id="finger-right-label">準備定位</span></div></div></div>`;
 }
 function keyboardHTML(l) {
-  const renderKey = k => `<span class="keyboard-key" data-key="${escapeHtml(k)}" title="${escapeHtml(k.toUpperCase())}：${escapeHtml(fingerFor(k))}${l.group === 'zh' && bopomofo[k] ? '／' + bopomofo[k] : ''}">${l.group === 'en' && SHIFT_PAIRS.some(([key]) => key === k) ? `<small class="shift-symbol">${escapeHtml(SHIFT_PAIRS.find(([key]) => key === k)[1])}</small>` : ''}<b>${escapeHtml(k.toUpperCase())}</b>${l.group === 'zh' ? `<small>${escapeHtml(bopomofo[k] || '')}</small>` : ''}</span>`;
+  const renderKey = k => `<span class="keyboard-key" data-key="${escapeHtml(k)}" title="${escapeHtml(k.toUpperCase())}：${escapeHtml(fingerFor(k))}${l.group === 'zh' && bopomofo[k] ? '／' + bopomofo[k] : ''}">${l.group === 'en' ? `<small class="finger-badge">${escapeHtml(fingerCode(k))}</small>` : ''}${l.group === 'en' && SHIFT_PAIRS.some(([key]) => key === k) ? `<small class="shift-symbol">${escapeHtml(SHIFT_PAIRS.find(([key]) => key === k)[1])}</small>` : ''}<b>${escapeHtml(k.toUpperCase())}</b>${l.group === 'zh' ? `<small>${escapeHtml(bopomofo[k] || '')}</small>` : ''}</span>`;
   const modifier = (label, key, width) => `<span class="keyboard-key modifier-key" style="flex:0 0 ${width}px;max-width:none" data-key="${key || ''}">${label}</span>`;
   return `${l.group === 'en' ? fingerOverlayHTML() : ''}<div class="virtual-keyboard" aria-label="標準 QWERTY 實體鍵盤與手指對照" style="overflow-x:auto;padding:4px 2px 8px">${keyRows.map((row,i) => `<div class="keyboard-row keyboard-row-${i + 1}" style="min-width:720px;padding-left:${[0,22,34,48][i]}px;padding-right:${[0,0,0,0][i]}px">${row.before ? modifier(row.before, row.before === 'Shift' ? 'ShiftLeft' : '', row.before === 'Shift' ? 112 : 76) : ''}${C.chars(row.keys).map(renderKey).join('')}${row.after ? modifier(row.after, row.after === 'Shift' ? 'ShiftRight' : '', row.after === 'Shift' ? 112 : 86) : ''}</div>`).join('')}<div class="keyboard-row keyboard-row-5" style="min-width:720px;padding:0 105px">${modifier('Ctrl','',58)}${modifier('Win','',58)}${modifier('Alt','',58)}<span class="keyboard-key space-key" data-key=" " style="flex:0 0 220px;max-width:none">SPACE · 拇指</span>${modifier('Alt','',58)}${modifier('Win','',58)}${modifier('Ctrl','',58)}</div></div>`;
 }
