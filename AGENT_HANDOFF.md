@@ -2,6 +2,63 @@
 
 > 工作區規則：每次修改網站程式、樣式、資料或部署設定後，必須在本檔新增一筆紀錄。紀錄要包含日期、修改內容、驗證方式、Git 狀態與尚未完成事項，方便切換 Agent 後快速接手。
 
+## 2026-09-07｜Supabase 改用 Vercel Postgres
+
+### 修改
+
+- 因 Supabase 免費方案流量不足，雲端資料層改為 Vercel Postgres／Neon serverless driver。
+- `api/records.js` 改用 `@neondatabase/serverless`，保留成績寫入與教師查詢 API。
+- 新增 `database/schema.sql`；移除 Supabase 專用 schema 與 `SUPABASE_*` 設定說明。
+- 新增 `package.json`／`package-lock.json` 依賴 `@neondatabase/serverless`，確保 Vercel 部署會安裝資料庫 driver。
+- 前端 `/api/records` 介面不變，現有本機快取、雲端同步與查詢篩選流程可沿用。
+
+### 驗證
+
+- `node --check api/records.js`、`node --check app.js`：通過。
+- `node --test tests/core.test.cjs tests/teacher-auth.test.cjs`：10 tests passed, 0 failed。
+- `npm install --package-lock-only`：通過，0 vulnerabilities。
+- Vercel Production Postgres 環境變數已確認存在。
+- 已使用加密的 Production 連線初始化 `database/schema.sql`，回報 `Database schema initialized.`；連線暫存檔已刪除。
+- 尚未連接新的 Vercel Postgres，因此尚未完成正式資料庫 smoke test。
+
+### Git／部署
+
+- 尚未提交、推送或部署。
+- Vercel 需建立／連結 Postgres，並設定 `POSTGRES_URL`（或 `DATABASE_URL`）。
+
+### 待辦
+
+- 重新部署後測試寫入、教師查詢與篩選。
+- `npm install` 回報目前依賴樹有 3 個 high severity audit 警告，部署前應檢查是否為可接受的間接依賴風險。
+
+## 2026-09-07｜新增 Supabase 雲端成績與查詢 API
+
+### 修改
+
+- 新增 `supabase/schema.sql`：建立 `typing_records` 資料表、欄位檢查、索引與 RLS。
+- 新增 `api/records.js`：測驗成績 POST 寫入 Supabase；教師登入後 GET 雲端紀錄，支援學生、語言、時長與日期篩選參數。
+- `app.js`：測驗完成後本機保存並背景同步雲端；教師頁進入時載入雲端紀錄，再沿用現有篩選、排行榜與 CSV 匯出。
+- `README.md`：補充 Supabase 初始化、Vercel 環境變數與雲端資料限制。
+
+### 驗證
+
+- `node --check app.js`：通過。
+- `node --check api/records.js`：通過。
+- `node --test tests/core.test.cjs tests/teacher-auth.test.cjs`：10 tests passed, 0 failed。
+- `git diff --check`：通過。
+- 尚未連接真實 Supabase 專案，因此尚未完成正式雲端寫入／查詢 smoke test。
+
+### Git／部署
+
+- 尚未提交、推送或部署。
+- 部署前必須在 Supabase 執行 `supabase/schema.sql`，並在 Vercel 設定 `SUPABASE_URL`、`SUPABASE_SERVICE_ROLE_KEY`。
+
+### 待辦
+
+- 設定 Supabase 環境變數後部署 Vercel。
+- 測試測驗完成寫入雲端、教師登入後查詢與篩選。
+- 不要把 Supabase service role key 寫入 Git、前端或交接文件。
+
 ## 2026-09-07｜首頁手指定位圖與 QWERTY 鍵盤修正
 
 ### 修改

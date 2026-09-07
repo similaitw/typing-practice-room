@@ -46,9 +46,9 @@ python -m http.server 4173
 
 ## 資料與限制
 
-名單、設定、課程進度與成績存在瀏覽器 `localStorage`，key 為 `typingPracticeRoomData`，不傳送到伺服器，不使用分析追蹤。教師登入會建立 HttpOnly、Secure、SameSite=Strict 的工作階段 Cookie，有效 4 小時。自訂文章只保留在目前頁面，JSON 備份不含文章內容。
+名單、設定、課程進度與離線快取存在瀏覽器 `localStorage`，key 為 `typingPracticeRoomData`。完成測驗後，成績會同步至 Vercel Postgres 雲端資料庫；教師登入後可從雲端載入紀錄並依學生、語言、測驗時間查詢。教師登入會建立 HttpOnly、Secure、SameSite=Strict 的工作階段 Cookie，有效 4 小時。自訂文章只保留在目前頁面，JSON 備份不含文章內容。
 
-不同電腦、瀏覽器、網址（包括本機與正式網站）不會同步資料。課程進度由目前瀏覽器共用；首頁成績顯示目前選取練習者。教師頁需密碼登入，管理操作會重新驗證登入憑證；密碼只存在 Vercel 伺服器環境變數。這是教師介面操作保護，資料本身仍在 localStorage，無法阻止裝置使用者透過開發者工具查看或修改本機資料，也不是跨裝置雲端資料權限系統。多台電腦的成績可各自匯出 CSV 後彙整；JSON 還原不是合併。
+不同電腦、瀏覽器與本機網址的名單／課程進度不會自動同步；正式網站的測驗成績會同步到 Vercel Postgres。教師頁需密碼登入，管理操作會重新驗證登入憑證；資料庫連線字串只存在 Vercel 伺服器環境變數。這是教師介面操作保護，瀏覽器 localStorage 仍可能被裝置使用者查看或修改。JSON 還原只更新目前瀏覽器資料，不會刪除雲端紀錄。
 
 網頁不能設定作業系統輸入法；實際選字與標點快捷鍵依輸入法而異。平板與手機可使用，練十指指法建議接實體鍵盤。貼上與拖放不計入練習／測速；本工具不提供正式考試監考。離開測速頁、修改語言或時長會重設進行中的測驗。
 
@@ -76,6 +76,15 @@ vercel --prod
 
 GitHub Pages 僅能提供學生端靜態功能，不支援本專案教師登入 API。完整功能請使用 Vercel。
 
+## 雲端資料庫設定
+
+本專案使用 Vercel Postgres（目前由 Neon 提供 serverless driver）保存測驗紀錄。先在 Vercel Storage／Marketplace 建立並連結 Postgres，再執行 [database/schema.sql](database/schema.sql)，最後於 Vercel Production 設定以下環境變數並重新部署：
+
+- `POSTGRES_URL`：Vercel Postgres／Neon 提供的資料庫連線字串；也支援 `DATABASE_URL`
+- 原有的 `TEACHER_PASSWORD` 與 `TEACHER_SESSION_SECRET` 仍需保留
+
+`POST /api/records` 由測驗完成流程使用；`GET /api/records` 需要教師登入，支援 `studentId`、`language`、`duration`、`from`、`to` 查詢參數。雲端不可用時，學生仍可使用本機快取，畫面會提示同步失敗。
+
 ## 驗證
 
 ```sh
@@ -98,6 +107,8 @@ node --check data.js
 - `favicon.svg`：圖示
 - `tests/core.test.cjs`：資料與計算測試
 - `vercel.json`：靜態網站設定
+- `api/records.js`：Vercel Postgres 成績寫入與教師查詢 API
+- `database/schema.sql`：雲端測驗紀錄資料表與索引
 
 ## 教師密碼管理
 

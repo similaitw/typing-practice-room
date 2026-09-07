@@ -36,6 +36,27 @@ function save() {
   try {localStorage.setItem(KEY, JSON.stringify(data));}
   catch {toast('瀏覽器無法儲存，請匯出 JSON 保存目前資料。');}
 }
+async function publishRecord(record) {
+  try {
+    const response = await fetch('/api/records', {method:'POST', headers:{'Content-Type':'application/json'}, credentials:'same-origin', body:JSON.stringify(record)});
+    if (!response.ok) throw Error();
+    toast('成績已同步到雲端。');
+  } catch {
+    toast('成績已保存在本機，但雲端同步失敗；請稍後重試或匯出備份。');
+  }
+}
+async function syncCloudRecords() {
+  try {
+    const response = await fetch('/api/records', {credentials:'same-origin', cache:'no-store'});
+    if (!response.ok) throw Error();
+    const cloudRecords = await response.json();
+    const records = new Map(data.testRecords.map(record => [record.id, record]));
+    cloudRecords.forEach(record => records.set(record.id, record));
+    data.testRecords = [...records.values()].sort((a,b) => b.createdAt.localeCompare(a.createdAt));
+    save();
+    return true;
+  } catch { return false; }
+}
 function show(view, teacherVerified = false) {
   if (view === 'teacher' && (!teacherVerified || !teacherIsActive())) {openTeacher(); return;}
   if (!document.getElementById(view)?.classList.contains('view')) return;
@@ -240,7 +261,7 @@ function finishTest(measured) {
     source:test.lang === 'custom' ? 'custom' : 'builtin',duration:test.duration,elapsedSeconds:Number(m.elapsed.toFixed(3)),speed:m.speed,
     unit:test.language === 'zh' ? 'CPM' : 'WPM',accuracy:m.accuracy,correctChars:m.correct,errors:m.errors,typedLength:m.typed,
     targetLength:C.chars(test.text).length,createdAt:new Date().toISOString()};
-  if (m.typed) {data.testRecords.push(record); save(); stats();}
+  if (m.typed) {data.testRecords.push(record); save(); stats(); publishRecord(record);}
   $('#player-ranking-language').value = test.language;
   renderPlayerRanking();
   $('#test-state').textContent = '測驗完成';
@@ -362,6 +383,7 @@ function renderTeacher() {
   $('#filter-student').value = [...$('#filter-student').options].some(o => o.value === selected) ? selected : '';
   renderScores();
   protectTeacherActions();
+  syncCloudRecords().then(synced => {if (synced) {renderScores(); stats(); toast('已載入雲端成績。');}});
 }
 function filteredRecords() {
   const student = $('#filter-student').value, language = $('#filter-language').value, duration = Number($('#filter-duration').value);
