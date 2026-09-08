@@ -101,14 +101,27 @@ document.addEventListener('visibilitychange',() => {
 
 // app.js is parsed after this file. Load optional cloud modules only after its global helpers exist.
 window.addEventListener('load', () => {
+  const loadGrowth = () => {
+    if (document.querySelector('script[data-growth-analytics]')) return;
+    const script = document.createElement('script');
+    script.src = 'growth-analytics.js';
+    script.dataset.growthAnalytics = 'true';
+    script.async = false;
+    script.onerror = () => console.warn('growth-analytics.js could not be loaded; existing teacher tools remain available.');
+    document.body.append(script);
+  };
   const loadWeakPractice = () => {
     const loadUI = () => {
-      if (document.querySelector('script[data-weak-key-practice]')) return;
+      if (document.querySelector('script[data-weak-key-practice]')) return loadGrowth();
       const script = document.createElement('script');
       script.src = 'weak-key-practice.js';
       script.dataset.weakKeyPractice = 'true';
       script.async = false;
-      script.onerror = () => console.warn('weak-key-practice.js could not be loaded; mistake analytics remains available.');
+      script.onload = loadGrowth;
+      script.onerror = () => {
+        console.warn('weak-key-practice.js could not be loaded; mistake analytics remains available.');
+        loadGrowth();
+      };
       document.body.append(script);
     };
     if (typeof WeakKeyCore !== 'undefined' || document.querySelector('script[data-weak-key-core]')) return loadUI();
@@ -117,7 +130,10 @@ window.addEventListener('load', () => {
     core.dataset.weakKeyCore = 'true';
     core.async = false;
     core.onload = loadUI;
-    core.onerror = () => console.warn('weak-key-core.js could not be loaded; weak-key practice is unavailable.');
+    core.onerror = () => {
+      console.warn('weak-key-core.js could not be loaded; weak-key practice is unavailable.');
+      loadGrowth();
+    };
     document.body.append(core);
   };
   const loadMistakes = () => {
