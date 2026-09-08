@@ -21,19 +21,21 @@
 - 自訂文章最多 10,000 字元；含中文或注音以 CPM 計算。
 - 中文組字確認後計分；Backspace 重新計算；結束只存一次；Ctrl + Enter 重測。
 - 測速頁可自行報名，班級、姓名、座號必填；相同身分沿用紀錄，測速期間鎖定姓名，獨立排行榜頁顯示中英文排名與目前練習者。
-- 學生名單貼上／CSV 匯入、編輯、刪除；重存名單保留學生 ID 與歷史成績關聯。
+- 教師學生名單同步至 Postgres；第一次使用雲端名單時會將既有本機名單合併上傳，之後教師換電腦登入仍可載入同一份啟用名單。
+- 學生名單支援貼上／CSV 匯入、編輯、停用與恢復；停用不刪除歷史成績，本機保留快取供既有介面與離線練習使用。
 - 成績可依學生、語言、時長篩選；中英文分開統計及排名；預設最低正確率 90%。
-- 同速以正確率優先，再以較新紀錄優先；訪客與已刪除學生不列入班級排行榜。
+- 同速以正確率優先，再以較新紀錄優先；訪客不列入班級排行榜。
 - UTF-8 BOM CSV 匯出目前篩選結果；JSON 完整備份／還原。
-- 刪除需確認，清除全部資料需二次確認；損壞資料提供原始檔下載與還原入口。
+- 清除資料需二次確認；雲端名單上線後「清除這台瀏覽器資料」只清本機快取、課程進度與本機成績，不刪除雲端名單或資料庫成績。
 
 ## 教師操作
 
-1. 點「教師端」，輸入教師密碼登入，再到「學生名單」，每行貼上 `701 01 練習同學甲`，也支援舊版座號及姓名格式，按「儲存名單」。此操作為新增，完全相同的班級、姓名與座號會略過。
-2. CSV 首列包含「座號、姓名」，可另加「班級」欄並交換欄位順序；讀取後確認名單，再按「儲存名單」。檔案上限 1 MB，最多 2,000 位學生。
-3. 學生到「打字測速」選自己的名字後測驗。
-4. 到「成績與排行榜」設定篩選，按「匯出篩選結果 CSV」。Excel 可辨識 UTF-8 BOM 中文編碼。
-5. 下課前到「備份與資料」匯出 JSON。換電腦時匯入備份；還原會取代該瀏覽器目前資料，操作前會提示確認。備份匯入上限 20 MB／50,000 筆測驗。
+1. 點「教師端」，輸入教師密碼登入。教師端會先讀取雲端學生名單；若目前瀏覽器已有舊版本機名單，第一次同步會自動合併到雲端。
+2. 到「學生名單」，每行貼上 `701 01 練習同學甲`，也支援舊版座號及姓名格式，按「儲存名單」。相同班級、姓名與座號會合併，既有學生 ID 儘量沿用。
+3. CSV 首列包含「座號、姓名」，可另加「班級」欄並交換欄位順序；讀取後確認名單，再按「儲存名單」。檔案上限 1 MB，最多 2,000 位學生。
+4. 編輯學生會同步更新雲端名單與該 student ID 的成績顯示欄位；「停用」只把學生移出一般名單，歷史成績仍保留，可在「已停用學生」恢復。
+5. 學生到「打字測速」選自己的名字後測驗；教師到「成績與排行榜」設定篩選，並可匯出 CSV。
+6. JSON 備份仍用於本機課程進度、設定與本機資料攜帶；還原不會刪除雲端學生名單或資料庫成績。
 
 ## 本機執行
 
@@ -43,13 +45,13 @@
 python -m http.server 4173
 ```
 
-開啟 `http://localhost:4173`。程式與字型不依賴外部 CDN；學生可離線練習。教師端必須連線到已設定密碼的 Vercel 網站；直接開啟 HTML 或 Python 靜態伺服器不提供教師登入，會保持鎖定。
+開啟 `http://localhost:4173`。程式與字型不依賴外部 CDN；學生可離線練習。教師端必須連線到已設定密碼的 Vercel 網站；直接開啟 HTML 或 Python 靜態伺服器不提供教師登入，因此雲端名單不會啟用，本機名單仍可作為快取／離線資料使用。
 
 ## 資料與限制
 
-名單、設定、課程進度與離線快取存在瀏覽器 `localStorage`，key 為 `typingPracticeRoomData`。完成測驗後，成績會同步至 Vercel Postgres 雲端資料庫；教師登入後可從雲端載入紀錄並依學生、語言、測驗時間查詢。教師登入會建立 HttpOnly、Secure、SameSite=Strict 的工作階段 Cookie，有效 4 小時。自訂文章只保留在目前頁面，JSON 備份不含文章內容。
+設定、課程進度、學生名單快取與離線快取存在瀏覽器 `localStorage`，key 為 `typingPracticeRoomData`。完成測驗後，成績會同步至 Vercel Postgres；教師學生名單也同步至 Postgres 的 `typing_students`。教師登入後可從雲端載入名單與成績。教師登入會建立 HttpOnly、Secure、SameSite=Strict 的工作階段 Cookie，有效 4 小時。自訂文章只保留在目前頁面，JSON 備份不含文章內容。
 
-不同電腦、瀏覽器與本機網址的名單／課程進度不會自動同步；正式網站的測驗成績會同步到 Vercel Postgres。教師頁需密碼登入，管理操作會重新驗證登入憑證；資料庫連線字串只存在 Vercel 伺服器環境變數。這是教師介面操作保護，瀏覽器 localStorage 仍可能被裝置使用者查看或修改。JSON 還原只更新目前瀏覽器資料，不會刪除雲端紀錄。
+正式網站的教師名單可跨電腦同步；課程進度目前仍以本機瀏覽器為主。學生在測速頁自行填寫的新身分先保存在目前瀏覽器，教師下次登入該瀏覽器時會併入雲端名單。教師頁需密碼登入，雲端名單 API 不對未登入使用者開放；資料庫連線字串只存在 Vercel 伺服器環境變數。JSON 還原只更新目前瀏覽器資料，不會刪除雲端紀錄。
 
 網頁不能設定作業系統輸入法；實際選字與標點快捷鍵依輸入法而異。平板與手機可使用，練十指指法建議接實體鍵盤。貼上與拖放不計入練習／測速；本工具不提供正式考試監考。離開測速頁、修改語言或時長會重設進行中的測驗。
 
@@ -79,23 +81,29 @@ GitHub Pages 僅能提供學生端靜態功能，不支援本專案教師登入 
 
 ## 雲端資料庫設定
 
-本專案使用 Vercel Postgres（目前由 Neon 提供 serverless driver）保存測驗紀錄。先在 Vercel Storage／Marketplace 建立並連結 Postgres，再執行 [database/schema.sql](database/schema.sql)，最後於 Vercel Production 設定以下環境變數並重新部署：
+本專案使用 Vercel Postgres（目前由 Neon 提供 serverless driver）保存測驗紀錄與教師學生名單。測驗成績 schema 在 [database/schema.sql](database/schema.sql)；雲端學生名單 schema 在 [database/cloud-students.sql](database/cloud-students.sql)。`/api/students` 在已驗證教師第一次存取時也會以 `CREATE ... IF NOT EXISTS` 安全確認資料表與索引存在，不會刪除既有資料。
 
 - `POSTGRES_URL`：Vercel Postgres／Neon 提供的資料庫連線字串；也支援 `DATABASE_URL`
 - 原有的 `TEACHER_PASSWORD` 與 `TEACHER_SESSION_SECRET` 仍需保留
 
-`POST /api/records` 由測驗完成流程使用；`GET /api/records` 需要教師登入，支援 `studentId`、`language`、`duration`、`from`、`to` 查詢參數。學生排行榜使用公開的 `GET /api/records?view=leaderboard&language=en&threshold=90`，只回傳排名所需欄位，以班級、姓名、座號合併跨裝置最佳紀錄，最多 2,000 位；完整紀錄仍需教師登入。完成測驗預設寫入資料庫；失敗存於 `typingPracticeRoomPendingRecords` 待傳佇列，重開頁面、恢復連線或每 30 秒會重試，也可按「重新同步／整理」。待傳成績不列入資料庫排行榜。舊版僅留在本機且未成功同步的紀錄不會自動回補。
+`POST /api/records` 由測驗完成流程使用；`GET /api/records` 需要教師登入，支援 `studentId`、`language`、`duration`、`from`、`to` 查詢參數。學生排行榜使用公開的 `GET /api/records?view=leaderboard&language=en&threshold=90`，只回傳排名所需欄位，以班級、姓名、座號合併跨裝置最佳紀錄，最多 2,000 位；完整紀錄仍需教師登入。完成測驗預設寫入資料庫；失敗存於 `typingPracticeRoomPendingRecords` 待傳佇列，重開頁面、恢復連線或每 30 秒會重試，也可按「重新同步／整理」。
+
+`GET /api/students`、`POST /api/students`、`PATCH /api/students` 全部需要有效教師 session。GET 讀取啟用與停用學生；POST 批次合併名單（每請求最多 200 位，前端自動分批）；PATCH 編輯、停用或恢復單一學生。API 不提供匿名全校名單，也不提供直接刪除有歷史資料學生的端點。
 
 ## 驗證
 
 ```sh
-node --test tests/core.test.cjs tests/teacher-auth.test.cjs tests/records-auth.test.cjs
+node --test tests/core.test.cjs tests/teacher-auth.test.cjs tests/records-auth.test.cjs tests/students-api.test.cjs
 node --check app.js
 node --check core.js
 node --check data.js
+node --check teacher-auth.js
+node --check cloud-students.js
+node --check api/records.js
+node --check api/students.js
 ```
 
-測試說明見 `TESTING.md`。
+GitHub Actions 亦會在 `main` push 與 pull request 自動執行上述測試與語法檢查。測試說明見 `TESTING.md`。
 
 ## 檔案
 
@@ -103,18 +111,22 @@ node --check data.js
 - `index.html`：頁面與六步新手教學
 - `styles.css`：響應式介面
 - `app.js`：導覽、課程、測速、教師工具
+- `cloud-students.js`：教師雲端名單同步、本機快取整合、停用／恢復操作
 - `core.js`：計分、排名、CSV 解析、備份驗證
 - `data.js`：課程、英中文題庫
 - `favicon.svg`：圖示
 - `tests/core.test.cjs`：資料與計算測試
+- `tests/students-api.test.cjs`：雲端名單驗證與教師授權測試
 - `vercel.json`：靜態網站設定
 - `api/records.js`：Vercel Postgres 成績寫入與教師查詢 API
+- `api/students.js`：教師雲端學生名單 API
 - `database/schema.sql`：雲端測驗紀錄資料表與索引
+- `database/cloud-students.sql`：雲端學生名單資料表與索引
 
 ## 教師密碼管理
 
 - Vercel Production 環境變數 `TEACHER_PASSWORD`：教師密碼，至少 12 字；建議保留高強度隨機密碼。
-- `TEACHER_SESSION_SECRET`：至少 32 字的隨機簽章密鑰，不可提供给學生或放在前端。
+- `TEACHER_SESSION_SECRET`：至少 32 字的隨機簽章密鑰，不可提供給學生或放在前端。
 - 修改環境變數後重新部署；變更密碼或簽章密鑰會讓舊的登入憑證失效。
 - 預覽環境需另行設定環境變數，未設定時教師登入會拒絕開放。
 - 初始密碼另行交付，不存入 GitHub。
@@ -124,6 +136,6 @@ node --check data.js
 
 ## 後續開發規格
 
-[整合開發規格與進階 Roadmap](typing-practice-room-codex-spec.md)包含目前功能基準、Phase 1–11、第一輪雲端名單與測速派課範圍、資料遷移及驗收要求。進階功能目前為規畫，不代表已上線；初版需求已封存供追溯。
+[整合開發規格與進階 Roadmap](typing-practice-room-codex-spec.md)包含目前功能基準、Phase 1–11、第一輪雲端名單與測速派課範圍、資料遷移及驗收要求。Phase 1 雲端學生名單已開始實作；Phase 2 教師派作業與「我的任務」尚未實作。
 
 [規格安全檢查報告](security_best_practices_report.md)：設計審查與待實作安全驗收，詳細要求見開發規格第 37 節；不是正式站安全認證。
