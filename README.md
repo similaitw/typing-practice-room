@@ -125,3 +125,5 @@ node --check data.js
 ## 後續開發規格
 
 [整合開發規格與進階 Roadmap](typing-practice-room-codex-spec.md)包含目前功能基準、Phase 1–11、第一輪雲端名單與測速派課範圍、資料遷移及驗收要求。進階功能目前為規畫，不代表已上線；初版需求已封存供追溯。
+
+[規格安全檢查報告](security_best_practices_report.md)：設計審查與待實作安全驗收，詳細要求見開發規格第 37 節；不是正式站安全認證。

@@ -5,6 +5,15 @@
 
 
 
+## 2026-09-08｜開發規格安全檢查（僅文件）
+
+- 目標：檢查 e2d5fee 進階規格的安全完整性。
+- 修改：新增 security_best_practices_report.md，列出 4 高／3 中規格缺口；主規格第 37 節補學生驗證、逐筆授權、session、CSRF、限流、作業去重、注入防護、共用裝置與遷移驗收。README 增加入口。
+- Database migration／Production：無；未改秘密、程式、資料或部署，未進行滲透測試。
+- 驗證：文件行號、連結與 git diff --check；安全驗收仍全部待實作，不標示為漏洞已修復。
+- Git：文件提交並推送 main，SHA 以 Git log 為準。
+- 下一步：第一輪開發同步落實第 37 節，學生私有資料與派課上線前執行負向測試。
+
 ## 2026-09-08｜整合進階開發規畫（僅文件）
 
 - 目標：將使用者提供的 ChatGPT 進階規格整合至 typing-practice-room-codex-spec.md。
