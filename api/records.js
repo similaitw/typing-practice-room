@@ -3,6 +3,8 @@
 const crypto = require('node:crypto');
 const {neon} = require('@neondatabase/serverless');
 const {readCredentials} = require('../lib/teacher-credentials');
+const {ensureAssignmentSchema} = require('../lib/typing-schema');
+const {readStudentSession, sameOrigin} = require('../lib/student-session');
 const COOKIE = '__Host-typing-teacher';
 const TTL = 4 * 60 * 60;
 const digest = value => crypto.createHash('sha256').update(value).digest();
@@ -36,16 +38,20 @@ function cleanRecord(record) {
       !record.typedLength || !record.targetLength || record.correctChars + record.errors !== record.typedLength ||
       record.correctChars > record.targetLength || typeof record.createdAt !== 'string' || !Number.isFinite(Date.parse(record.createdAt))) return null;
   const text = (value, max) => typeof value === 'string' && value.length <= max ? value : '';
+  const assignmentId = record.assignmentId == null || record.assignmentId === '' ? null :
+    (typeof record.assignmentId === 'string' && record.assignmentId.length <= 100 && !/\s/.test(record.assignmentId) ? record.assignmentId : undefined);
+  if (assignmentId === undefined) return null;
   return {
     id: record.id, studentId: record.studentId || null, studentLabel: text(record.studentLabel, 160),
     studentClass: text(record.studentClass, 40), studentName: text(record.studentName, 80), studentSeat: text(record.studentSeat, 20),
     language: record.language, source: record.source, duration: record.duration, elapsedSeconds: Number(record.elapsedSeconds),
     speed: record.speed, unit: record.unit, accuracy: record.accuracy, correctChars: record.correctChars,
-    errors: record.errors, typedLength: record.typedLength, targetLength: record.targetLength, createdAt: new Date(record.createdAt).toISOString()
+    errors: record.errors, typedLength: record.typedLength, targetLength: record.targetLength,
+    assignmentId, createdAt: new Date(record.createdAt).toISOString()
   };
 }
 function rowToRecord(row) {
-  return {id:row.id,studentId:row.student_id,studentLabel:row.student_label,studentClass:row.student_class,studentName:row.student_name,studentSeat:row.student_seat,language:row.language,source:row.source,duration:row.duration,elapsedSeconds:Number(row.elapsed_seconds),speed:row.speed,unit:row.unit,accuracy:row.accuracy,correctChars:row.correct_chars,errors:row.errors,typedLength:row.typed_length,targetLength:row.target_length,createdAt:row.created_at};
+  return {id:row.id,studentId:row.student_id,studentLabel:row.student_label,studentClass:row.student_class,studentName:row.student_name,studentSeat:row.student_seat,language:row.language,source:row.source,duration:row.duration,elapsedSeconds:Number(row.elapsed_seconds),speed:row.speed,unit:row.unit,accuracy:row.accuracy,correctChars:row.correct_chars,errors:row.errors,typedLength:row.typed_length,targetLength:row.target_length,assignmentId:row.assignment_id || null,createdAt:row.created_at};
 }
 module.exports = async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
@@ -54,13 +60,40 @@ module.exports = async function handler(req, res) {
   if (!settings) return res.status(503).json({error: 'Vercel Postgres 尚未設定，請聯絡網站管理者。'});
   const sql = neon(settings.databaseUrl);
   if (req.method === 'POST') {
+    if (!sameOrigin(req)) return res.status(403).json({error:'來源驗證失敗。'});
     const record = cleanRecord(req.body);
     if (!record) return res.status(400).json({error: '成績資料格式不正確。'});
     try {
-      await sql`INSERT INTO typing_records (id, student_id, student_label, student_class, student_name, student_seat, language, source, duration, elapsed_seconds, speed, unit, accuracy, correct_chars, errors, typed_length, target_length, created_at)
-        VALUES (${record.id}, ${record.studentId}, ${record.studentLabel}, ${record.studentClass}, ${record.studentName}, ${record.studentSeat}, ${record.language}, ${record.source}, ${record.duration}, ${record.elapsedSeconds}, ${record.speed}, ${record.unit}, ${record.accuracy}, ${record.correctChars}, ${record.errors}, ${record.typedLength}, ${record.targetLength}, ${record.createdAt})
-        ON CONFLICT (id) DO NOTHING`;
-      return res.status(201).json({saved: true, id: record.id});
+      if (record.assignmentId) {
+        await ensureAssignmentSchema(sql);
+        const studentSession = await readStudentSession(sql, req.headers.cookie);
+        if (!studentSession) return res.status(401).json({error:'正式作業需要先使用學生啟用碼登入。'});
+        const assignments = await sql`SELECT a.* FROM typing_assignments a
+          JOIN typing_assignment_targets t ON t.assignment_id = a.id
+          WHERE a.id = ${record.assignmentId} AND a.active = true AND t.student_class = ${studentSession.student.className}
+            AND (a.start_at IS NULL OR a.start_at <= now()) LIMIT 1`;
+        const assignment = assignments[0];
+        if (!assignment) return res.status(403).json({error:'這份作業未指派給目前學生或尚未開始。'});
+        if (record.source !== 'builtin' || record.language !== assignment.language || record.duration !== assignment.duration) {
+          return res.status(400).json({error:'測驗設定與老師指定作業不一致。'});
+        }
+        record.studentId = studentSession.studentId;
+        record.studentClass = studentSession.student.className;
+        record.studentName = studentSession.student.name;
+        record.studentSeat = studentSession.student.seat;
+        record.studentLabel = [record.studentClass,record.studentName,record.studentSeat ? record.studentSeat + '號' : ''].filter(Boolean).join(' ｜ ');
+        record.createdAt = new Date().toISOString();
+      }
+      if (record.assignmentId) {
+        await sql`INSERT INTO typing_records (id, student_id, student_label, student_class, student_name, student_seat, language, source, duration, elapsed_seconds, speed, unit, accuracy, correct_chars, errors, typed_length, target_length, assignment_id, created_at)
+          VALUES (${record.id}, ${record.studentId}, ${record.studentLabel}, ${record.studentClass}, ${record.studentName}, ${record.studentSeat}, ${record.language}, ${record.source}, ${record.duration}, ${record.elapsedSeconds}, ${record.speed}, ${record.unit}, ${record.accuracy}, ${record.correctChars}, ${record.errors}, ${record.typedLength}, ${record.targetLength}, ${record.assignmentId}, ${record.createdAt})
+          ON CONFLICT (id) DO NOTHING`;
+      } else {
+        await sql`INSERT INTO typing_records (id, student_id, student_label, student_class, student_name, student_seat, language, source, duration, elapsed_seconds, speed, unit, accuracy, correct_chars, errors, typed_length, target_length, created_at)
+          VALUES (${record.id}, ${record.studentId}, ${record.studentLabel}, ${record.studentClass}, ${record.studentName}, ${record.studentSeat}, ${record.language}, ${record.source}, ${record.duration}, ${record.elapsedSeconds}, ${record.speed}, ${record.unit}, ${record.accuracy}, ${record.correctChars}, ${record.errors}, ${record.typedLength}, ${record.targetLength}, ${record.createdAt})
+          ON CONFLICT (id) DO NOTHING`;
+      }
+      return res.status(201).json({saved: true, id: record.id, assignmentId: record.assignmentId});
     } catch (error) {return res.status(502).json({error: error.message || '雲端資料服務目前無法使用。'});}
   }
   if (req.method !== 'GET') {res.setHeader('Allow', 'GET, POST'); return res.status(405).json({error: '不支援此操作。'});}
@@ -92,16 +125,22 @@ module.exports = async function handler(req, res) {
   const query = new URL(req.url, `https://${req.headers.host}`).searchParams;
   const studentId = query.get('studentId'), language = ['en', 'zh'].includes(query.get('language')) ? query.get('language') : null;
   const duration = [15, 30, 60, 120].includes(Number(query.get('duration'))) ? Number(query.get('duration')) : null;
+  const assignmentId = query.get('assignmentId') && query.get('assignmentId').length <= 100 ? query.get('assignmentId') : null;
   const from = query.get('from') && Number.isFinite(Date.parse(query.get('from'))) ? new Date(query.get('from')).toISOString() : null;
   const to = query.get('to') && Number.isFinite(Date.parse(query.get('to'))) ? new Date(query.get('to')).toISOString() : null;
   try {
+    if (assignmentId) await ensureAssignmentSchema(sql);
     const rows = await sql`SELECT * FROM typing_records
       WHERE (${studentId}::text IS NULL OR student_id = ${studentId})
         AND (${language}::text IS NULL OR language = ${language})
         AND (${duration}::int IS NULL OR duration = ${duration})
+        AND (${assignmentId}::text IS NULL OR assignment_id = ${assignmentId})
         AND (${from}::timestamptz IS NULL OR created_at >= ${from})
         AND (${to}::timestamptz IS NULL OR created_at <= ${to})
       ORDER BY created_at DESC LIMIT 50000`;
     return res.status(200).json(rows.map(rowToRecord));
   } catch (error) {return res.status(502).json({error: error.message || '雲端資料服務目前無法使用。'});}
 };
+
+module.exports.cleanRecord = cleanRecord;
+module.exports.sessionValid = sessionValid;
