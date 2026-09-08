@@ -47,6 +47,7 @@ module.exports = async function handler(req,res) {
   let session;
   try {session = await readStudentSession(sql,req.headers.cookie);} catch {return res.status(502).json({error:'目前無法驗證學生登入。'});}
   if (!session) return res.status(401).json({error:'學生登入已失效，請重新取得啟用碼。'});
+  if (req.method === 'POST' && req.body?.studentId !== session.studentId) return res.status(403).json({error:'課程進度與目前學生登入身分不一致。'});
   try {await ensureProgressSchema(sql);} catch {return res.status(502).json({error:'課程進度資料表目前無法初始化。'});}
 
   try {
@@ -68,7 +69,7 @@ module.exports = async function handler(req,res) {
           attempts = typing_progress.attempts + 1,
           updated_at = now()
         RETURNING lesson_id, language, completed_at, best_accuracy, best_speed, attempts, updated_at`;
-      return res.status(200).json({saved:true,progress:rowToProgress(rows[0])});
+      return res.status(200).json({saved:true,student:session.student,progress:rowToProgress(rows[0])});
     }
 
     const lessonIds = cleanMerge(req.body);
@@ -82,7 +83,7 @@ module.exports = async function handler(req,res) {
     }
     const rows = await sql`SELECT lesson_id, language, completed_at, best_accuracy, best_speed, attempts, updated_at
       FROM typing_progress WHERE student_id = ${session.studentId} ORDER BY updated_at DESC, lesson_id`;
-    return res.status(200).json({merged:true,progress:rows.map(rowToProgress)});
+    return res.status(200).json({merged:true,student:session.student,progress:rows.map(rowToProgress)});
   } catch {return res.status(502).json({error:'目前無法讀寫課程進度。'});}
 };
 
