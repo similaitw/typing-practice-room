@@ -2,6 +2,38 @@
 
 > 工作區規則：每次修改網站程式、樣式、資料或部署設定後，必須在本檔新增一筆紀錄。紀錄要包含日期、修改內容、驗證方式、Git 狀態與尚未完成事項，方便切換 Agent 後快速接手。
 
+## 2026-09-08｜Phase 3 教師作業完成度儀表板與課堂投影模式
+
+### 修改
+
+- 新增 `api/assignment-dashboard.js`：僅有效教師 session 可讀取指定作業完成度；支援全部指派班級或 `class` 單班篩選。API 只統計啟用中的學生，回傳總嘗試、達標次數、最佳速度、最佳正確率、最近練習與 `未開始／進行中／已完成／已逾期` 狀態。
+- 完成狀態沿用 Phase 2 作業門檻：達標紀錄必須符合最低正確率、最低速度且在截止時間前；有嘗試但尚未達標會顯示「進行中」，不會因有效次數為 0 誤判為未開始。
+- 新增 `assignment-dashboard.js`：教師「作業管理」每份作業增加「完成度」按鈕；儀表板顯示班級人數、已完成、進行中、未開始、完成率與逐生表格，可切換全部指派班級或單一班級。
+- 儀表板在畫面開啟且教師 session 有效時每 12 秒 polling 更新；離開／關閉後停止不必要更新。
+- 新增「課堂投影模式」：班級下拉、完成數／總人數／完成率與座號方格，每 12 秒更新，可切換瀏覽器全螢幕。投影畫面刻意只顯示座號與狀態，不顯示學生完整姓名。
+- `teacher-auth.js` 改為 `cloud-students.js` → `assignments.js` → `assignment-dashboard.js` 依序載入；dashboard 監看整個教師區 DOM，避免「作業管理」登入後動態建立時錯過掛載。
+- 新增 `tests/assignment-dashboard.test.cjs`：完成狀態四種分支、作業 ID／班級輸入格式、真實教師登入 cookie 與 tampering 驗證。
+- `.github/workflows/test.yml` 已加入 dashboard 前後端與新測試；README 補齊 Phase 3 使用方式、API、隱私邊界與檔案清單。
+
+### 驗證
+
+- GitHub Actions run `34232727476`：最新動態掛載修正版的 Node tests、Syntax checks 全部 success。
+- GitHub Actions run `34232934271`：README 後續 commit 再跑完整測試，conclusion `success`。
+- Vercel 對功能 commit `242309e6` 回報 deployment `success`；README commit `ed5f0f3` 亦回報 Vercel `success`。
+- 未讀取、顯示或修改教師密碼／session secret；未使用真實教師密碼寫入 production 作業／學生資料，因此目前不能宣稱正式班級 E2E 已人工通過。
+
+### Git／部署
+
+- Phase 3 主要 commits：`3871da3`（dashboard API）、`21e93e2`（dashboard tests）、`717e565`（dashboard／projection UI）、`2d7fa59`（模組載入）、`941928c`（CI）、`242309e`（動態教師 UI 掛載修正）、`ed5f0f3`（README）。
+- 已推送 `main`；Vercel deployment status 成功，正式站仍為 `https://typing-practice-room.vercel.app`。
+
+### 待辦／下一階段
+
+- 仍應做一次完整 Production 人工驗收：教師登入→真實雲端名單→建立 701 作業→學生兌換啟用碼→完成 1／3、2／3、3／3→教師完成度表自動更新→課堂投影只顯示座號→另一瀏覽器確認一致。此次未使用教師密碼，所以此項不得標為已通過。
+- Phase 4 下一步：錯鍵診斷／手指弱點分析；建議先保存 aggregate mistake statistics，不保存完整學生輸入文章。
+- 公開排行榜是否排除 `typing_students.active=false` 仍是 Phase 1 遺留待辦；課程進度仍在 localStorage。
+- 正式作業速度／正確率仍由既有 client 計分，本系統不是正式考試防作弊工具；若未來要求更高可信度，再做 attempt token／伺服器端核對。
+
 ## 2026-09-08｜Phase 2 教師派作業與學生「我的任務」第一版
 
 ### 修改
