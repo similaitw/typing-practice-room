@@ -31,12 +31,13 @@ function parseFilters(url,host){
   const className=safeText(query.get('class'),40),studentId=safeText(query.get('studentId'),100);
   const language=['en','zh'].includes(query.get('language'))?query.get('language'):'en';
   const duration=[15,30,60,120].includes(Number(query.get('duration')))?Number(query.get('duration')):60;
+  const source=query.get('source')==='all'?'all':'builtin';
   const requestedThreshold=Number(query.get('threshold')??90);
   const threshold=Number.isInteger(requestedThreshold)&&requestedThreshold>=0&&requestedThreshold<=100?requestedThreshold:undefined;
   const from=safeDate(query.get('from')),to=safeDate(query.get('to'));
   if([className,studentId,threshold,from,to].some(value=>value===undefined))return null;
   if(from&&to&&Date.parse(from)>Date.parse(to))return null;
-  return {className,studentId,language,duration,threshold,from,to};
+  return {className,studentId,language,duration,source,threshold,from,to};
 }
 
 module.exports=async function handler(req,res){
@@ -62,6 +63,7 @@ module.exports=async function handler(req,res){
       FROM typing_records r
       JOIN typing_students s ON s.id=r.student_id AND s.active=true
       WHERE r.language=${filters.language} AND r.duration=${filters.duration} AND r.accuracy>=${filters.threshold}
+        AND (${filters.source}::text='all' OR r.source=${filters.source})
         AND (${filters.className}::text IS NULL OR s.student_class=${filters.className})
         AND (${filters.studentId}::text IS NULL OR r.student_id=${filters.studentId})
         AND (${filters.from}::timestamptz IS NULL OR r.created_at>=${filters.from})
