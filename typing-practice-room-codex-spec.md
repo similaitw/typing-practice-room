@@ -1,497 +1,2101 @@
-# 指尖練習室：打字教學與測速網站完整開發規格
+# 指尖練習室｜整合開發規格與進階 Roadmap
 
-> 將本文件交給 VS Code 的 Codex，請它依照規格直接完成程式、測試、GitHub 推送及 Vercel 部署。
+更新日期：2026-09-08。現況基準：`17466ff`（英文練習字數調整）。
 
-## 一、Codex 執行指令
+- Repository：[similaitw/typing-practice-room](https://github.com/similaitw/typing-practice-room)
+- Production：[指尖練習室](https://typing-practice-room.vercel.app/)
+- 本文件整合使用者提供的 ChatGPT 進階規畫，作為後續開發依據。本次僅更新文件，Phase 1–11 均未因本次整理而實作。
+- 閱讀順序：本節現況與整合決議 → 第一輪範圍（第 32–35 節）→ 各階段詳細規格。
+- 實際操作看 [README.md](README.md)，驗證紀錄看 [TESTING.md](TESTING.md)，最新異動看 [AGENT_HANDOFF.md](AGENT_HANDOFF.md)。
+- [初版完整開發規格](docs/initial-development-spec.md)保留為歷史需求，不能用其中「不使用後端／不連資料庫」等舊條款覆蓋目前系統。
 
-請在目前工作區建立一個完整可用的靜態網站，專案名稱為 **Typing Practice Room（指尖練習室）**。
+## 現況與開發狀態
 
-請不要只建立示意版或單純畫面，所有按鈕、課程、測速、成績、排行榜、匯入匯出功能都必須能實際使用。完成後請自行啟動本機預覽，測試桌面版與手機版，修正錯誤，再推送至 GitHub 並部署至 Vercel。
+| 範圍 | 狀態／基準 |
+| --- | --- |
+| 技術 | HTML、CSS、Vanilla JavaScript、Vercel Functions、Postgres／Neon；沿用既有 repo 與 Production |
+| 教學 | 六步新手教學、實體鍵盤與手位圖；末步僅提供基準鍵第一課入口 |
+| 課程 | 7 課英文、8 課注音／中文，完整 Shift 符號與指法提示 |
+| 英文練習量 | 已完成：預設 200 字元，可設 50–2,000 字元，含空格與標點；本機保存設定與 JSON 備份 |
+| 測速 | WPM／CPM，15／30／60／120 秒、自訂文章與既有計分規則 |
+| 身分 | 班級、姓名、座號；目前自行輸入，尚非學生帳號驗證 |
+| 成績與公開排行榜 | 已使用資料庫；按班級、姓名、座號合併最佳成績，公開 API 僅回傳排名欄位 |
+| 斷線補傳 | 已完成持久待傳佇列及自動／手動重試；舊版本機未同步歷史成績尚不自動回補 |
+| 教師保護 | 已有教師 session、可自訂共用密碼及雲端雜湊儲存；不可擅自修改實際密碼 |
+| 學生名單、課程進度 | 目前以 localStorage 保存；雲端名單為 Phase 1，雲端進度為 Phase 6 |
+| CSV／JSON | 既有匯入、匯出及備份還原必須保留 |
+| 進階 Phase 1–11 | 待開發；原文的「目前已有」只描述既有功能，不表示派課等功能已完成 |
 
-- GitHub 帳號：`similaitw`
-- GitHub repo：`typing-practice-room`
-- 預計網址：`https://typing-practice-room.vercel.app`
-- 必須建立獨立 repo，不可放入 `auto-github-vercel`
-- 採靜態網站，不需要付費資料庫、付費 API 或 AI API
-- 根目錄必須有 `index.html`
-- 若 repo 或 Vercel 專案已存在，更新既有專案，不要重複建立
+## 整合決議與實作前須落實的細節
+
+1. **第一輪範圍**：Phase 1 雲端名單，加上 Phase 2 測速作業資料模型、教師管理、學生「我的任務」與完成計算。課程類型作業是後續 Phase 2 擴充；第一輪只做 `speed_test`。
+2. **多班派發**：以 `typing_assignment_targets` 為正式目標班級來源，schema 範例中的 `target_class` 不另存為相互矛盾的單班來源。第一輪含基本完成狀態查詢，進階儀表板／投影／polling 留 Phase 3。
+3. **學生關聯遷移**：既有跨裝置 `student_id` 可能不同；導入雲端學生 ID 時須按既有班級／姓名／座號建立對應、去重並保留歷史紀錄。身分更名及停用不可讓舊成績失聯；不得直接以新的 ID 取代所有既有關聯而不驗證。
+4. **學生端資料存取**：名單管理需要教師 session。學生選身分流程不能直接公開全校名單；第一輪需設計受限班級選擇／身分確認與授權範圍。自行填寫姓名不等於可讀取該人的完整私人歷史。
+5. **有效作業成績**：伺服器須驗證學生、目標班級、作業是否啟用、語言、時長與紀錄 ID 去重，再依門檻計算有效次數。作業起訖、時區（預設 Asia/Taipei）、逾期提交、離線晚到紀錄及已交作業修改規則，須在該階段實作時明確定義並測試；不能只相信 client 的完成旗標或時間。
+6. **課程作業資料**：後續新增 `lesson` 作業時需定義 `lesson_id` 與課程練習成果記錄方式，包含派課指定字數；不可將課程結果硬塞成既有限時測速紀錄。保留現有可調字數功能。
+7. **離線範圍**：保留已載入頁面的自由練習及待傳快取；目前不宣稱尚未載入網站即可完整離線啟動。未來離線作業狀態必須標示快取／待同步，避免誤報已送出。
+8. **錯鍵分析定義**：Phase 4 須區分最後輸入內容的錯誤與過程中已修正錯誤，避免每次 input 重複累加；中文 IME 不可直接推論實體錯鍵。只保存聚合統計。
+9. **安全與相容性**：所有 migration 保存於 database/，可重複執行且向後相容。保留既有資料、教師 session 保護及 API 驗證；寫入驗證、速率限制與公開回傳欄位需納入階段驗收。
+10. **驗證紀錄**：以下驗收均是待執行需求，不是已通過的測試報告；完成後才更新 TESTING.md 與交接紀錄。文件更新本身不需要資料庫 migration 或網站部署。
+
+## 階段索引
+
+| 順序 | 工作 | 狀態 |
+| --- | --- | --- |
+| P0 | 持續維持現有 Production 與回歸驗證 | 持續 |
+| Phase 1 | 雲端學生名單、班級、停用與還原 | 待開發，第一輪 |
+| Phase 2 | 多班作業、我的任務、有效次數與完成狀態 | 第一輪先測速，課程作業後續擴充 |
+| Phase 3 | 教師即時儀表板、課堂投影、10–15 秒 polling | 待開發 |
+| Phase 4 | 聚合錯鍵與手指診斷 | 待開發 |
+| Phase 5 | 客戶端規則生成弱鍵補強 | 待開發 |
+| Phase 6 | 課程進度雲端同步 | 待開發 |
+| Phase 7 | 個人與班級成長分析 | 待開發 |
+| Phase 8 | CSV 班級報表與列印 | 待開發 |
+| Phase 9 | 我的紀錄與輕量趨勢圖 | 待開發 |
+| Phase 10 | 正向成就系統 | 待開發 |
+| Phase 11 | 班級挑戰，以中位數比較 | 待開發 |
+
+排行榜進階篩選為跨階段需求（第 16 節），以合理語言／時長／日期範圍比較；不搶先於雲端名單與派課主流程。
+
+## 進階規格正文
+
+以下保留提供規畫的第 0–36 節需求與驗收細節；遇到第一版／最終版範圍差異，以前述整合決議及第一輪限定為準。
+
+## 0. 任務定位
+
+以下為後續開發任務的規格；使用者啟動實作時，接手目前專案繼續開發。
+
+這不是重新製作網站，也不要更換技術框架。
+
+現有架構：
+
+* HTML
+* CSS
+* Vanilla JavaScript
+* Vercel Functions
+* Vercel Postgres / Neon
+* GitHub main
+* Vercel Production
+
+目前已有：
+
+* 六步新手教學
+* 英文鍵位課程
+* 注音鍵位課程
+* 中文打字課程
+* 英文 WPM 測速
+* 中文 CPM 測速
+* 15／30／60／120 秒測驗
+* 自訂文章
+* 學生身分：班級／座號／姓名
+* 公開排行榜
+* 教師登入
+* 教師密碼雲端驗證
+* 學生名單
+* CSV 匯入／匯出
+* JSON 備份
+* Postgres 成績資料庫
+* 失敗成績待傳佇列
+* 跨裝置資料庫排行榜
 
 ---
 
-## 二、產品目標
+## 1. 開始工作前必做
 
-製作一個適合國中資訊課使用的打字教學與測速網站，學生可練習英文鍵位、注音符號與中文輸入，並進行限時測驗。教師可匯入學生名單、查看班級排行榜、篩選個別學生紀錄及匯出 CSV。
+開始修改之前：
 
-網站需具備以下特性：
+1. 閱讀：
 
-1. 學生第一次進入就知道如何開始。
-2. 課程由簡入深，先準確再追求速度。
-3. 測速計算必須正確且清楚說明單位。
-4. 電腦、Chromebook、平板及手機皆可使用。
-5. 不需註冊、不收集個資、不連接外部資料庫。
-6. 學生名單與成績預設儲存在瀏覽器 `localStorage`。
-7. 可匯出／匯入 JSON 完整備份，並可匯出 CSV 成績表。
+   * `README.md`
+   * `AGENT_HANDOFF.md`
+   * `TESTING.md`
+
+2. 檢查：
+
+   * `index.html`
+   * `app.js`
+   * `core.js`
+   * `data.js`
+   * `styles.css`
+   * `api/`
+   * `database/`
+   * `tests/`
+
+3. 查看最新 Git commit。
+
+4. 以目前 production 行為為 baseline。
+
+5. 不可破壞既有功能。
+
+6. 不要擅自改教師密碼。
+
+7. 不要把 password、session secret、database URL 寫入 repository。
+
+8. 每完成一個階段：
+
+   * 跑完整測試
+   * 做瀏覽器驗證
+   * 更新 README
+   * 更新 AGENT_HANDOFF.md
+   * commit
+   * push main
+   * 確認 Vercel production
+
+若某階段牽涉 database migration：
+
+* migration 必須 backward compatible
+* 既有 typing_records 不可遺失
+* 舊欄位不可直接破壞
+* 新欄位優先 nullable 或提供合理 default
+* SQL 必須可安全重複執行
 
 ---
 
-## 三、技術規格
+## 2. 產品最終方向
 
-### 建議技術
+將目前的：
 
-- HTML5
-- CSS3
-- 原生 JavaScript（ES6+）
-- 不使用後端
-- 不依賴需要建置的框架；直接開啟 `index.html` 也能運作
-- 可使用 Google Fonts，但須設定中文字型 fallback
-- 所有應用資料儲存在 `localStorage`
+> 打字練習網站
 
-### 檔案結構
+升級為：
+
+> 國中資訊課「打字學習＋教師派課＋學習診斷＋班級管理」系統
+
+完整流程應為：
+
+教師建立班級
+↓
+匯入學生
+↓
+教師派發打字任務
+↓
+學生開啟網站
+↓
+看到自己的待完成任務
+↓
+直接進入指定練習
+↓
+完成後自動送出
+↓
+教師端即時看到完成狀態
+↓
+分析速度、正確率、錯鍵、進步幅度
+↓
+匯出班級成績
+
+---
+
+## 3. 開發原則
+
+### 3.1 不要現在改框架
+
+目前不要轉成：
+
+* React
+* Vue
+* Next.js
+* TypeScript
+
+先維持現有架構。
+
+只有當目前架構真的無法維護時才做模組化，而且必須逐步進行。
+
+---
+
+## 3.2 Desktop classroom first
+
+主要使用情境：
+
+* 國中電腦教室
+* Chromebook
+* Windows PC
+* 實體鍵盤
+
+同時保持：
+
+* 平板可用
+* 手機可用
+* 360px 無橫向捲動
+
+---
+
+## 3.3 Classroom UX
+
+學生操作應盡可能少。
+
+理想流程：
+
+開網站
+→ 選班級
+→ 選座號／姓名
+→ 顯示「老師指定作業」
+→ 按開始
+→ 打字
+→ 完成
+
+不要要求學生理解複雜設定。
+
+---
+
+## 4. 開發 Roadmap
+
+---
+
+## Phase 1｜雲端班級與學生名單
+
+目前：
+
+* 成績已存在 Postgres
+* 教師本機學生名單仍依賴 localStorage
+
+這會造成：
+
+老師換電腦後，名單不同步。
+
+因此第一階段先做：
+
+### 4.1 Cloud students
+
+新增資料表，例如：
+
+```sql
+typing_students
+```
+
+建議欄位：
 
 ```text
-typing-practice-room/
-├─ index.html
-├─ styles.css
-├─ app.js
-├─ data.js
-├─ README.md
-├─ vercel.json
-└─ assets/
-   ├─ favicon.svg
-   └─ og-image.svg
+id
+student_class
+student_seat
+student_name
+active
+created_at
+updated_at
 ```
 
-如果有明確理由可以調整檔案，但不可將全部程式塞在單一 HTML。
+建議 unique identity：
 
-### Vercel 設定
-
-`vercel.json`：
-
-```json
-{
-  "cleanUrls": true,
-  "trailingSlash": false
-}
+```text
+student_class
+student_seat
+student_name
 ```
 
-Vercel 設定：
+但必須考量：
 
-- Framework Preset：Other
-- Build Command：留白
-- Output Directory：`.`
-- Install Command：留白
+舊 typing_records 已有：
+
+```text
+student_id
+student_class
+student_seat
+student_name
+```
+
+不要破壞舊成績關聯。
 
 ---
 
-## 四、視覺設計
+### 4.2 教師端名單改成雲端
 
-整體風格為溫暖、清楚、具有教學感的現代介面，不要像制式補習網站。
+教師：
 
-### 色彩
+「學生名單」
 
-- 背景米白：`#F5F2E9`
-- 卡片：`#FFFDF7`
-- 深綠主色：`#225C45`
-- 淺綠強調：`#C8EF8B`
-- 橘色提示：`#EE805C`
-- 文字：`#17231D`
-- 錯誤紅：`#D85A4A`
+應由 Postgres 讀取。
 
-### 介面原則
+支援：
 
-- 字級清楚，適合教室投影。
-- 正確字顯示深綠，錯字顯示紅底，當前字有橘色游標。
-- 按鈕需有 hover、focus 與 disabled 狀態。
-- 不可只靠顏色表示正誤，需搭配底線、圖示或文字。
-- 手機寬度 360px 不可橫向溢出。
-- 支援鍵盤操作與清楚的 focus 樣式。
-- 尊重 `prefers-reduced-motion`。
+* 新增學生
+* 批次新增
+* CSV 匯入
+* 編輯
+* 停用
+* 還原
+* 搜尋
+* 班級篩選
+
+原本 localStorage 名單：
+
+可以保留做 cache／fallback。
+
+但：
+
+> Postgres 才是正式資料來源。
 
 ---
 
-## 五、頁面與功能
+### 4.3 不直接刪除有歷史成績學生
 
-### 1. 首頁／學習總覽
+教師按刪除時：
 
-內容：
+預設改成：
 
-- 網站名稱「指尖練習室」
-- 標語：「不用看鍵盤，讓手指記住路。」
-- 「開始第一課」與「直接測速」按鈕
-- 顯示個人最佳英文 WPM、最佳中文 CPM、最高正確率、完成測驗次數
-- 三步驟教學：基準鍵、擴展鍵位、限時測速
-- 顯示近期練習與個人進步幅度
+```text
+active = false
+```
 
-### 2. 英文打字課程
+不要直接破壞歷史成績。
 
-至少包含：
+介面顯示：
 
-1. 基準鍵：A S D F J K L ;
-2. 食指延伸：G H R T Y U V B N M
-3. 上排鍵：Q W E R T Y U I O P
-4. 下排鍵：Z X C V B N M , . /
-5. 常用英文單字
-6. 英文短句、大小寫及標點
+* 在籍
+* 已停用
 
-每課需有：
+可提供：
 
-- 課程名稱與簡短說明
-- 本課目標鍵
-- 虛擬鍵盤與負責手指提示
-- 練習文字
-- 即時正確／錯誤標示
-- WPM、正確率及完成百分比
-- 完成提示與下一課按鈕
-- 課程完成狀態保存在瀏覽器
+「永久刪除沒有成績紀錄的學生」
 
-### 3. 注音與中文輸入課程
+但要二次確認。
 
-至少包含：
+---
 
-1. 標準注音鍵盤位置介紹
-2. 注音聲母練習
-3. 注音韻母與聲調練習
-4. 常用注音組合
-5. 中文詞語練習
-6. 中文短句
-7. 中文標點
-8. 中文段落輸入
+### 4.4 班級管理
 
-注意：
+從學生資料自動整理班級。
 
-- 網頁無法控制學生使用哪一種中文輸入法，因此應提示學生切換到自己的中文輸入法。
-- 注音課程可顯示「實體按鍵、注音符號、手指」對照。
-- 中文成績以 CPM（每分鐘正確中文字元）為主。
-- 不要用 WPM 評量中文。
+例如：
 
-### 4. 打字測速
+```text
+701
+702
+703
+704
+705
+706
+707
+708
+709
+710
+```
 
-測驗模式：
+教師端增加：
 
-- 英文
-- 中文
-- 自訂文章
-- 15 秒
-- 30 秒
-- 60 秒（預設）
-- 120 秒
+「班級」
 
-操作流程：
-
-1. 選擇學生或使用訪客模式。
-2. 選擇語言與測驗時間。
-3. 顯示隨機文章。
-4. 游標進入輸入框後，輸入第一個字才開始計時。
-5. 即時顯示剩餘時間、速度、正確率及完成進度。
-6. 時間歸零或文章完成時結束。
-7. 顯示結果卡片並保存紀錄。
-8. 可按「再測一次」或 `Ctrl + Enter` 重測。
-
-測驗進行中若切換模式或時間，需先重設狀態，不可沿用舊計時。
-
-### 5. 學生名單
-
-教師端可：
-
-- 直接貼上學生名單，每行一位
-- 支援格式：`01 王小明`、`王小明`
-- 自動去除空白行與完全重複的資料
-- 顯示總人數
-- 編輯、刪除學生
-- 提供範例名單
-- 支援 CSV 匯入，至少辨識「座號、姓名」欄位
-- 測驗頁可從下拉選單選擇學生
-- 未選學生時視為訪客，不列入班級排行榜
-
-不要在預設版本內放入真實學生姓名。
-
-### 6. 教師成績後台
+頁面。
 
 顯示：
 
-- 班級人數
-- 已參與學生數
-- 總測驗次數
-- 班級平均速度
-- 班級平均正確率
-- 英文 WPM 排行榜
-- 中文 CPM 排行榜
-- 每位學生最佳成績
-- 每位學生最近成績
-- 測驗明細表
+```text
+701　28 人
+702　29 人
+703　27 人
+```
 
-篩選：
+不用一開始另外建立複雜 school / teacher / class schema。
 
-- 全部／單一學生
-- 英文／中文
-- 15／30／60／120 秒
-- 日期由新到舊
-
-教師可：
-
-- 匯出目前篩選結果為 UTF-8 BOM CSV，確保 Excel 開啟中文不亂碼
-- 匯出完整 JSON 備份
-- 匯入 JSON 還原
-- 刪除單筆錯誤紀錄
-- 清除全部資料前必須二次確認
-
-### 7. 班級排行榜
-
-規則：
-
-- 英文與中文分開排名
-- 預設依個人最佳速度排名
-- 同速時正確率較高者優先
-- 再相同時，較新的紀錄優先
-- 可設定最低正確率門檻，預設 90%
-- 未達門檻的成績不列入排名
-- 顯示名次、座號姓名、速度、正確率及測驗日期
-- 前三名有清楚但不過度競爭的視覺標示
-- 顯示鼓勵語，不顯示貶低性評語
+先以 student_class 為班級識別即可。
 
 ---
 
-## 六、速度與正確率計算
+## Phase 1 驗收
 
-### 基本定義
+必須確認：
 
-- `typedLength`：學生實際輸入的字元數
-- `correctChars`：逐字比較後，位置與內容皆正確的字元數
-- `errors`：輸入內容中與目標位置不同的字元數
-- `elapsedMinutes`：實際經過秒數 ÷ 60
-
-### 英文 WPM
-
-使用標準 5 字元為一個英文單字：
-
-```text
-英文 WPM = (correctChars / 5) / elapsedMinutes
-```
-
-### 中文 CPM
-
-```text
-中文 CPM = correctChars / elapsedMinutes
-```
-
-### 正確率
-
-```text
-正確率 = correctChars / typedLength × 100%
-```
-
-- 尚未輸入時顯示 100%，但不可產生成績。
-- 結果四捨五入為整數。
-- 計算時不得除以 0。
-- Backspace 修正後，依目前輸入內容重新計算。
-- 自訂文章若包含中文，以 CPM 顯示；純英文則以 WPM 顯示。
+* 教師電腦 A 新增學生
+* 教師電腦 B 登入
+* 可以看到相同名單
+* 舊成績仍存在
+* 舊 leaderboard 正常
+* CSV 匯入正常
+* 不會產生重複學生
+* inactive 學生不出現在一般學生選單
+* inactive 學生歷史成績仍保留
 
 ---
 
-## 七、資料結構
+## Phase 2｜教師派發作業
 
-### 學生
+這是本次進階版最重要功能。
 
-```js
+新增：
+
+```text
+typing_assignments
+```
+
+最初版本先不要做得過度複雜。
+
+---
+
+## 5. Assignment schema
+
+建議資料：
+
+```text
+id
+title
+description
+assignment_type
+language
+duration
+min_accuracy
+min_speed
+required_attempts
+target_class
+start_at
+due_at
+active
+created_at
+updated_at
+```
+
+assignment_type 第一版支援：
+
+```text
+speed_test
+lesson
+```
+
+---
+
+## 5.1 Speed Test Assignment
+
+例如教師建立：
+
+```text
+作業名稱：
+701 英文打字測驗 1
+
+類型：
+英文測速
+
+時間：
+60 秒
+
+最低正確率：
+90%
+
+最低速度：
+20 WPM
+
+要求完成：
+3 次
+
+班級：
+701
+
+期限：
+2026/09/15
+```
+
+---
+
+## 5.2 Lesson Assignment
+
+教師也能指定：
+
+```text
+英文
+第 1 課 基準鍵
+```
+
+或：
+
+```text
+注音
+第 3 課
+```
+
+第一版可直接使用現在 data.js 裡現有 lesson ID。
+
+不要複製教材。
+
+assignment 只儲存：
+
+```text
+lessonId
+```
+
+---
+
+## 5.3 多班派發
+
+可以選：
+
+```text
+701
+702
+705
+```
+
+不要只允許單一班。
+
+建議使用 assignment target table：
+
+```text
+typing_assignment_targets
+```
+
+欄位：
+
+```text
+assignment_id
+student_class
+```
+
+之後才能擴充指定單一學生。
+
+---
+
+## 6. Student Assignment View
+
+學生選好：
+
+```text
+班級
+座號
+姓名
+```
+
+後：
+
+首頁新增明顯區塊：
+
+## 我的任務
+
+例如：
+
+```text
+今天要完成
+
+英文打字 60 秒
+要求：90% / 20 WPM
+完成：1 / 3
+截止：9/15
+
+[開始練習]
+```
+
+完成顯示：
+
+```text
+✓ 已完成
+最佳 27 WPM
+正確率 96%
+```
+
+---
+
+## 6.1 作業狀態
+
+支援：
+
+```text
+未開始
+進行中
+已完成
+已逾期
+```
+
+使用視覺清楚的 badge。
+
+---
+
+## 6.2 一鍵進入
+
+按：
+
+```text
+開始練習
+```
+
+自動：
+
+* 切到正確語言
+* 設定時間
+* 設定學生
+* 設定 assignment ID
+* 開始該任務
+
+學生不需要重新選設定。
+
+---
+
+## 7. typing_records 擴充
+
+現有 typing_records 增加：
+
+```text
+assignment_id nullable
+```
+
+不要讓既有資料失效。
+
+舊資料：
+
+```text
+assignment_id = null
+```
+
+---
+
+## 7.1 判斷作業是否完成
+
+不要另外保存容易失真的「完成」布林值。
+
+應由成績計算。
+
+例如：
+
+```text
+required_attempts = 3
+min_accuracy = 90
+min_speed = 20
+```
+
+找出符合：
+
+```text
+assignment_id
+student
+accuracy >= 90
+speed >= 20
+```
+
+的有效紀錄。
+
+達到 3 次：
+
+```text
+completed
+```
+
+---
+
+## 8. Phase 2 教師作業管理
+
+教師端新增：
+
+## 作業管理
+
+包含：
+
+### 建立作業
+
+### 目前作業
+
+### 已結束
+
+### 複製作業
+
+### 編輯
+
+### 停用
+
+不要真的刪除已有學生成績的 assignment。
+
+---
+
+## Phase 2 驗收
+
+建立：
+
+```text
+701
+60 秒英文
+90%
+20 WPM
+3 次
+```
+
+測試：
+
+學生 A：
+
+```text
+85%
+30 WPM
+```
+
+不算。
+
+學生 A：
+
+```text
+92%
+18 WPM
+```
+
+不算。
+
+學生 A：
+
+```text
+92%
+22 WPM
+```
+
+算 1 次。
+
+完成三筆後：
+
+```text
+已完成
+```
+
+教師端與學生端狀態必須一致。
+
+---
+
+## Phase 3｜教師班級即時儀表板
+
+完成 assignment 後進入下一階段。
+
+教師點某項作業：
+
+```text
+701 英文 60 秒
+```
+
+顯示：
+
+```text
+完成 18 / 29
+62%
+```
+
+---
+
+## 9. 學生狀態表
+
+例如：
+
+| 座號 | 姓名  | 狀態  | 次數 | 最佳速度 | 正確率 |
+| -- | --- | --- | -: | ---: | --: |
+| 01 | 王○明 | 完成  |  3 |   31 | 96% |
+| 02 | 林○婷 | 進行中 |  2 |   24 | 93% |
+| 03 | 陳○華 | 未開始 |  0 |    - |   - |
+
+支援排序：
+
+* 座號
+* 完成狀態
+* 速度
+* 正確率
+* 進步幅度
+
+---
+
+## 9.1 課堂投影模式
+
+新增：
+
+## 課堂模式
+
+適合投影幕使用。
+
+不顯示完整成績細節。
+
+顯示：
+
+```text
+701 英文打字
+18 / 29 完成
+```
+
+學生用座號呈現：
+
+```text
+01 ✓
+02 ✓
+03 …
+04 ✓
+05 …
+```
+
+避免投影學生完整姓名。
+
+---
+
+## 9.2 自動更新
+
+教師儀表板可以：
+
+每 10～15 秒更新一次。
+
+不要用過度複雜 WebSocket。
+
+第一版 polling 即可。
+
+離開頁面停止 polling。
+
+---
+
+## Phase 4｜錯鍵診斷
+
+這是下一個真正有教學價值的功能。
+
+現在 typing_records 只有：
+
+```text
+correct_chars
+errors
+```
+
+不足以知道：
+
+學生到底哪個鍵最容易錯。
+
+---
+
+## 10. Mistake Analytics
+
+測驗時前端統計：
+
+```text
+expected key
+actual key
+count
+```
+
+例如：
+
+```json
 {
-  id: "uuid",
-  seat: "01",
-  name: "王小明",
-  createdAt: "2026-09-06T12:00:00.000Z"
+  "r>t": 4,
+  "e>r": 2,
+  "i>o": 3
 }
 ```
 
-### 測驗紀錄
+但不要保存：
 
-```js
-{
-  id: "uuid",
-  studentId: "uuid-or-null",
-  studentLabel: "01 王小明",
-  language: "en",
-  source: "builtin",
-  duration: 60,
-  elapsedSeconds: 60,
-  speed: 42,
-  unit: "WPM",
-  accuracy: 97,
-  correctChars: 210,
-  errors: 6,
-  typedLength: 216,
-  targetLength: 280,
-  createdAt: "2026-09-06T12:00:00.000Z"
-}
+完整學生輸入內容。
+
+只保存 aggregate mistake statistics。
+
+避免無意義保存學生完整文字。
+
+---
+
+## 10.1 Database
+
+typing_records 可增加：
+
+```text
+mistakes jsonb
 ```
 
-### localStorage key
+或另外建立：
 
-統一使用版本化物件：
-
-```js
-{
-  version: 1,
-  settings: {},
-  students: [],
-  lessonProgress: {},
-  testRecords: []
-}
+```text
+typing_record_mistakes
 ```
 
-建議 key：`typingPracticeRoomData`
+若使用 JSONB 較簡單，可先採：
 
-需提供資料解析失敗的容錯處理，不可因損壞的 localStorage 使整站白畫面。
-
----
-
-## 八、文章題庫
-
-- 英文、中文各至少 15 篇。
-- 每篇適合國中生，內容正向、中性。
-- 英文文章需涵蓋常見字母與標點。
-- 中文文章長度需足以進行 120 秒測驗。
-- 避免政治、暴力、成人、品牌廣告及具爭議內容。
-- 題庫放在 `data.js`，與主要邏輯分離。
-- 同一瀏覽器連續測驗時盡量不要立刻重複上一篇。
-
----
-
-## 九、隱私與安全
-
-- 不將學生姓名、成績或輸入內容傳到網路。
-- 不使用分析追蹤碼。
-- 不使用 Cookie。
-- 不要求帳號密碼。
-- 自訂文章只保留在目前頁面，除非使用者主動匯出備份。
-- 所有畫面顯示學生輸入的文字時使用 `textContent` 或安全轉義，避免 XSS。
-- CSV／JSON 匯入需驗證格式與大小。
-
----
-
-## 十、無障礙與使用體驗
-
-- HTML 的 `lang` 使用 `zh-Hant`。
-- 表單都有 `label`。
-- 動態結果使用適當的 `aria-live`，但不可每打一個字都造成過度朗讀。
-- 所有功能可用鍵盤操作。
-- 色彩對比符合 WCAG AA。
-- 測驗結束後，焦點移到結果標題。
-- 刪除與清除操作有明確確認。
-- 音效可關閉，預設建議關閉或記住使用者設定。
-
----
-
-## 十一、驗收測試
-
-Codex 完成後必須逐項驗證：
-
-### 課程
-
-- [ ] 英文課程可切換並保存進度
-- [ ] 注音／中文課程可切換並保存進度
-- [ ] 正確字、錯字、目前字顯示正確
-- [ ] 完成課程後可進入下一課
-
-### 測速
-
-- [ ] 尚未輸入時不開始計時
-- [ ] 第一個字輸入後開始倒數
-- [ ] 15、30、60、120 秒皆能正確結束
-- [ ] 英文顯示 WPM
-- [ ] 中文顯示 CPM
-- [ ] 自訂中文文章顯示 CPM
-- [ ] Backspace 後統計重新計算
-- [ ] 結束後不可繼續輸入
-- [ ] 成績只保存一次，不可重複寫入
-
-### 教師端
-
-- [ ] 可貼上並儲存學生名單
-- [ ] 可匯入 CSV
-- [ ] 學生下拉選單正確更新
-- [ ] 訪客成績不列入排行榜
-- [ ] 英文與中文排行榜分開
-- [ ] 最低正確率門檻有效
-- [ ] 個別學生篩選有效
-- [ ] CSV 可由 Excel 正確開啟中文
-- [ ] JSON 備份與還原有效
-- [ ] 刪除資料需確認
-
-### 響應式與品質
-
-- [ ] Chrome 桌面版正常
-- [ ] 360px 手機版無橫向捲動
-- [ ] 768px 平板版正常
-- [ ] 開發者主控台沒有 JavaScript error
-- [ ] 所有導覽按鈕可用
-- [ ] 重新整理後資料仍存在
-- [ ] localStorage 損壞時可安全恢復
-
----
-
-## 十二、README 要求
-
-`README.md` 至少包含：
-
-- 專案名稱與簡介
-- 功能列表
-- 本機執行方式
-- 資料儲存與隱私說明
-- GitHub Pages／Vercel 部署方式
-- WPM、CPM、正確率計算公式
-- 專案檔案結構
-- 已知限制：不同電腦的 localStorage 不會自動同步
-
----
-
-## 十三、GitHub 與 Vercel 部署
-
-完成並測試後執行：
-
-```bash
-git init
-git add .
-git commit -m "Build typing tutorial and classroom speed test"
-git branch -M main
-gh repo create similaitw/typing-practice-room --public --source=. --remote=origin --push
+```text
+mistakes jsonb
 ```
 
-如果 repo 已存在：
+---
 
-```bash
-git remote add origin https://github.com/similaitw/typing-practice-room.git
-git push -u origin main
+## 10.2 Finger Analytics
+
+利用目前已經存在的鍵位／手指 mapping。
+
+將錯誤整理成：
+
+```text
+左小指
+左無名指
+左中指
+左食指
+右食指
+右中指
+右無名指
+右小指
 ```
-
-部署 Vercel：
-
-```bash
-vercel --prod
-```
-
-若尚未登入 GitHub CLI 或 Vercel CLI，請停在登入步驟，清楚告知使用者要完成什麼；不要要求使用者把密碼或 Token 貼進聊天。
-
-部署完成後需回報：
-
-1. GitHub repo 完整網址
-2. Vercel 正式網址
-3. 最新 commit SHA
-4. 實際完成的功能
-5. 尚未完成或受限制的功能
-6. 測試結果
 
 ---
 
-## 十四、完成標準
+## 10.3 教師診斷
 
-只有在下列條件全部符合時才算完成：
+顯示：
 
-- 網站並非示意畫面，核心功能可實際操作。
-- 中英文速度計算單位正確。
-- 教師可管理名單、看成績與排行榜。
-- 可安全匯出及還原資料。
-- 手機與桌面版皆可使用。
-- 程式沒有明顯錯誤。
-- 已推送到獨立 GitHub repo。
-- 已部署到 Vercel 正式網址。
+### 701 最常錯的鍵
 
-請直接開始實作，不必再次詢問配色或基本功能；只有在 GitHub／Vercel 登入、repo 衝突或會覆寫既有資料時才停下來詢問。
+```text
+R  34 次
+T  29 次
+B  24 次
+P  17 次
+```
+
+### 最弱手指
+
+```text
+右小指 31%
+左小指 24%
+```
+
+---
+
+## 10.4 個人診斷
+
+學生完成後顯示：
+
+```text
+你最容易按錯：
+
+R → T
+P → [
+B → N
+```
+
+再提供：
+
+```text
+[針對弱鍵練習]
+```
+
+---
+
+## Phase 5｜自動補強練習
+
+使用錯鍵分析，自動產生練習內容。
+
+例如：
+
+學生常錯：
+
+```text
+r
+t
+f
+g
+```
+
+產生：
+
+```text
+rt tr rf fr
+tree free great
+```
+
+但：
+
+不要使用 AI API。
+
+全部在 client 端利用：
+
+* 錯誤鍵
+* data.js 題庫
+* 規則
+* 單字集合
+
+產生即可。
+
+---
+
+## 11. 弱鍵練習
+
+首頁新增：
+
+```text
+我的弱鍵
+```
+
+例如：
+
+```text
+R
+T
+B
+N
+```
+
+按：
+
+```text
+開始弱鍵特訓
+```
+
+建立 1～3 分鐘短練習。
+
+---
+
+## Phase 6｜課程進度雲端同步
+
+目前 lesson progress 在 localStorage。
+
+升級為：
+
+```text
+typing_progress
+```
+
+例如：
+
+```text
+student identity
+lesson_id
+language
+best_accuracy
+best_speed
+attempts
+completed_at
+updated_at
+```
+
+---
+
+## 12. 課程進度
+
+學生換電腦後：
+
+仍然知道：
+
+```text
+英文 1 ✓
+英文 2 ✓
+英文 3 進行中
+英文 4 尚未
+```
+
+---
+
+## 12.1 localStorage
+
+localStorage 仍可：
+
+* 快取
+* 離線使用
+
+但正式網站：
+
+Postgres 為主要進度來源。
+
+---
+
+## Phase 7｜學習成長分析
+
+教師端新增：
+
+## 學習分析
+
+---
+
+## 13. 個人成長
+
+例如：
+
+```text
+王小明
+
+第一次：
+13 WPM
+
+目前：
+27 WPM
+
+提升：
++14 WPM
++108%
+```
+
+---
+
+## 13.1 班級分析
+
+顯示：
+
+```text
+701
+
+平均：
+24 WPM
+
+中位數：
+22 WPM
+
+平均正確率：
+94%
+
+達標：
+23 / 29
+```
+
+---
+
+## 13.2 Speed bands
+
+例如：
+
+```text
+< 10
+10–19
+20–29
+30–39
+40+
+```
+
+顯示人數分布。
+
+---
+
+## 13.3 只比較合理資料
+
+分析要能設定：
+
+```text
+語言
+測驗時間
+最低正確率
+日期範圍
+```
+
+不要把：
+
+15 秒與 120 秒測驗直接混成同一比較基準。
+
+---
+
+## Phase 8｜報表
+
+教師端提供：
+
+## 匯出班級報表
+
+CSV 至少包含：
+
+```text
+班級
+座號
+姓名
+作業
+完成狀態
+有效次數
+最佳速度
+最佳正確率
+第一次速度
+最近速度
+進步幅度
+常錯鍵
+```
+
+---
+
+## 14. Print Report
+
+新增適合列印的：
+
+```text
+班級作業成績表
+```
+
+CSS：
+
+```css
+@media print
+```
+
+不需要立即產生 PDF。
+
+瀏覽器即可：
+
+```text
+列印 → PDF
+```
+
+---
+
+## Phase 9｜學生學習歷程
+
+學生頁新增：
+
+## 我的紀錄
+
+顯示：
+
+```text
+英文最佳
+中文最佳
+已完成課程
+最近作業
+最近 10 次測驗
+```
+
+---
+
+## 15. 趨勢圖
+
+不要引入大型 chart library。
+
+第一版可以：
+
+* SVG
+* Canvas
+* CSS
+
+畫簡單折線圖。
+
+資料：
+
+```text
+日期
+WPM / CPM
+accuracy
+```
+
+---
+
+## Phase 10｜成就系統
+
+最後才做。
+
+不要優先於教師功能。
+
+學生達成：
+
+```text
+第一次完成
+英文 20 WPM
+英文 30 WPM
+英文 40 WPM
+正確率 95%
+正確率 100%
+連續完成 5 次
+完成所有英文鍵位課
+完成所有注音鍵位課
+```
+
+顯示徽章。
+
+不要做：
+
+* 公開同學嘲諷型排名
+* 負面徽章
+* 倒數排名
+
+---
+
+## Phase 11｜Class Challenge
+
+作為進階趣味功能。
+
+教師建立：
+
+```text
+701 vs 702
+英文 60 秒
+```
+
+比較：
+
+不要只比較全班平均。
+
+優先使用：
+
+```text
+median
+```
+
+避免單一高手影響整班。
+
+可顯示：
+
+```text
+701  中位數 27 WPM
+702  中位數 25 WPM
+```
+
+---
+
+## 16. 排行榜進階
+
+目前排行榜保留。
+
+增加篩選：
+
+```text
+全校
+班級
+英文
+中文
+15
+30
+60
+120 秒
+本週
+本月
+全部
+```
+
+預設仍需：
+
+```text
+accuracy >= 90%
+```
+
+---
+
+## 17. 隱私與安全
+
+學生資料已涉及：
+
+```text
+班級
+姓名
+座號
+成績
+```
+
+因此：
+
+### 公開 API
+
+只能回傳必要資訊。
+
+不要提供：
+
+* 全部測驗歷史
+* teacher-only 資訊
+* database internal fields
+
+---
+
+## 17.1 Teacher API
+
+下列功能全部要求教師 session：
+
+* 名單
+* 作業建立
+* 作業修改
+* 成績完整查詢
+* 班級報表
+* 班級統計
+
+---
+
+## 17.2 Student API
+
+學生端只能取得：
+
+* 自己目前需要的 assignment
+* 必要公開排行榜資料
+* 必要進度資料
+
+不要建立一個 API：
+
+```text
+GET /students
+```
+
+直接公開全校姓名名單。
+
+---
+
+## 17.3 Rate limiting / validation
+
+所有寫入 API：
+
+server side 驗證：
+
+* string length
+* language
+* duration
+* speed
+* accuracy
+* timestamp
+* assignment
+* student identity
+
+不要相信 client 傳入的所有資料。
+
+---
+
+## 18. 防作弊定位
+
+本系統不是正式考試系統。
+
+但仍維持：
+
+* paste 不計
+* drag/drop 不計
+* typing 才開始 timer
+* 完成只存一次
+
+可記錄：
+
+```text
+visibility change count
+```
+
+但先不要據此判定作弊。
+
+最多在教師端顯示：
+
+```text
+測驗期間曾離開頁面
+```
+
+作為參考。
+
+不要直接顯示：
+
+```text
+作弊
+```
+
+---
+
+## 19. UX 改進
+
+學生首頁最終應有：
+
+```text
+繼續練習
+老師指定
+自由練習
+我的紀錄
+```
+
+不要讓：
+
+```text
+課程
+測速
+排行榜
+教師功能
+```
+
+全部同權重擠在一起。
+
+---
+
+## 19.1 Teacher / Student separation
+
+主介面：
+
+Student first。
+
+教師端放：
+
+```text
+教師管理
+```
+
+登入後才出現：
+
+```text
+班級
+學生
+作業
+成績
+分析
+備份
+設定
+```
+
+---
+
+## 20. Accessibility
+
+保持：
+
+* keyboard navigation
+* visible focus
+* button label
+* form label
+* sufficient contrast
+* 不只靠顏色判斷對錯
+
+---
+
+## 21. Performance
+
+不要因加入教師管理功能讓學生打字頁變慢。
+
+特別注意：
+
+`keydown/input`
+
+不能每打一個字：
+
+向 server 發 API。
+
+測驗期間：
+
+所有即時運算在 client。
+
+只在：
+
+```text
+完成
+```
+
+後送結果。
+
+---
+
+## 22. API 建議
+
+可依實際架構調整，不必完全照此命名。
+
+例如：
+
+```text
+/api/students
+/api/assignments
+/api/assignment-status
+/api/progress
+/api/records
+/api/analytics
+```
+
+---
+
+## 23. Database 建議
+
+最終可包含：
+
+```text
+typing_students
+
+typing_records
+
+typing_assignments
+
+typing_assignment_targets
+
+typing_progress
+```
+
+先不要做過度正規化。
+
+---
+
+## 24. JavaScript 架構改善
+
+目前 app.js 已偏大。
+
+後續增加功能時：
+
+不要持續把所有程式塞進 app.js。
+
+可以逐步拆成：
+
+```text
+js/
+  api.js
+  students.js
+  assignments.js
+  teacher-dashboard.js
+  analytics.js
+```
+
+但：
+
+不要為了重構一次改完整專案。
+
+採：
+
+「新功能模組化，舊功能逐步搬移」
+
+策略。
+
+---
+
+## 25. 測試要求
+
+每個 Phase 必須有 automated tests。
+
+至少涵蓋：
+
+### Students
+
+* duplicate
+* edit
+* inactive
+* cloud persistence
+
+### Assignments
+
+* create
+* edit
+* class target
+* due date
+* inactive
+
+### Completion
+
+* accuracy threshold
+* speed threshold
+* required attempts
+
+### Records
+
+* assignment_id
+* old record compatibility
+
+### Analytics
+
+* mistake aggregation
+* finger aggregation
+
+---
+
+## 25.1 Browser tests
+
+至少：
+
+```text
+360px
+768px
+1440px
+```
+
+確認：
+
+* no horizontal overflow
+* keyboard usable
+* student assignment usable
+* teacher dashboard usable
+
+---
+
+## 26. 資料 migration 特別注意
+
+目前已有 production 資料。
+
+因此：
+
+不可：
+
+```sql
+drop table typing_records;
+```
+
+不可：
+
+重建正式表而清掉資料。
+
+必須：
+
+```sql
+alter table...
+```
+
+或建立新 table。
+
+migration SQL 應保存於：
+
+```text
+database/
+```
+
+---
+
+## 27. Offline
+
+既有學生練習支援離線。
+
+請保留。
+
+如果 assignment API 無法連線：
+
+顯示：
+
+```text
+目前無法取得老師指定作業，
+仍可使用自由練習。
+```
+
+不要讓整個網站不能用。
+
+---
+
+## 28. Error UX
+
+不要顯示：
+
+```text
+Failed
+undefined
+500
+fetch error
+```
+
+給學生。
+
+改成：
+
+```text
+成績已暫存在這台電腦，
+網路恢復後會自動補傳。
+```
+
+教師端可以看到較詳細錯誤。
+
+---
+
+## 29. AGENT_HANDOFF
+
+每次功能 commit 應一併更新交接紀錄；部署結果可在後續紀錄補上，以 Git log 核對確切 SHA：
+
+必須更新：
+
+```text
+AGENT_HANDOFF.md
+```
+
+內容：
+
+```text
+日期
+
+本次目標
+
+修改
+
+Database migration
+
+測試
+
+Production 驗證
+
+Commit
+
+未完成
+
+下一步
+```
+
+---
+
+## 30. Commit 原則
+
+不要一個 commit 完成十個 Phase。
+
+例如：
+
+```text
+feat: add cloud student roster
+
+feat: add assignment data model
+
+feat: add student assignment view
+
+feat: add teacher assignment dashboard
+
+feat: add typing mistake analytics
+```
+
+每一階段可獨立 rollback。
+
+---
+
+## 31. 優先順序
+
+依下列順序實作：
+
+### P0
+
+穩定現有 production。
+
+### P1
+
+Cloud Students
+
+### P2
+
+Assignments
+
+### P3
+
+Student My Tasks
+
+### P4
+
+Teacher Assignment Dashboard
+
+### P5
+
+Classroom Projection Mode
+
+### P6
+
+Mistake Analytics
+
+### P7
+
+Weak-key Practice
+
+### P8
+
+Cloud Lesson Progress
+
+### P9
+
+Progress Analytics
+
+### P10
+
+Reports
+
+### P11
+
+Achievements / Class Challenge
+
+不要跳著做。
+
+---
+
+## 32. 第一輪 Codex 任務
+
+本次先完成：
+
+## Phase 1 + Phase 2 基礎
+
+也就是：
+
+### A. Cloud Students
+
+完成：
+
+```text
+typing_students
+```
+
+以及教師端：
+
+* 查看
+* 新增
+* CSV 匯入
+* 編輯
+* 停用
+
+---
+
+### B. Assignment Database
+
+完成：
+
+```text
+typing_assignments
+typing_assignment_targets
+```
+
+以及：
+
+```text
+typing_records.assignment_id
+```
+
+---
+
+### C. Teacher Assignment UI
+
+教師可以：
+
+```text
+建立
+查看
+修改
+停用
+```
+
+作業。
+
+第一版 assignment：
+
+只需要支援：
+
+```text
+speed_test
+```
+
+欄位：
+
+```text
+title
+language
+duration
+min_accuracy
+min_speed
+required_attempts
+target classes
+due date
+```
+
+---
+
+### D. Student My Tasks
+
+學生選好：
+
+```text
+班級
+座號
+姓名
+```
+
+之後：
+
+看到自己的作業。
+
+點：
+
+```text
+開始
+```
+
+直接進入指定測速設定。
+
+---
+
+### E. Completion
+
+測驗完成：
+
+typing_records 寫入：
+
+```text
+assignment_id
+```
+
+並正確計算：
+
+```text
+未開始
+進行中
+已完成
+```
+
+---
+
+## 33. 第一輪不要做
+
+第一輪先不要實作：
+
+* 徽章
+* Class Challenge
+* AI
+* WebSocket
+* 多教師帳號
+* Google Login
+* OAuth
+* React
+* Next.js
+* 複雜圖表
+* 弱鍵生成
+* 完整 lesson cloud progress
+
+這些留後面。
+
+---
+
+## 34. 第一輪完成條件
+
+以下情境必須實際成立：
+
+教師：
+
+1. 登入。
+2. 新增 701 學生。
+3. 建立：
+
+```text
+英文 60 秒
+90%
+20 WPM
+完成 3 次
+```
+
+4. 指派 701。
+
+學生：
+
+1. 開網站。
+2. 選 701／座號／姓名。
+3. 首頁看到作業。
+4. 按開始。
+5. 自動進入英文 60 秒。
+6. 測驗完成。
+7. 成績成功寫入 assignment_id。
+8. 回首頁看到 1 / 3。
+
+完成三次有效測驗：
+
+```text
+3 / 3
+✓ 已完成
+```
+
+教師：
+
+重新整理後：
+
+仍能看到：
+
+```text
+該學生已完成。
+```
+
+換另一台電腦登入：
+
+也能看到相同資料。
+
+---
+
+## 35. Regression
+
+完成以上功能後：
+
+以下舊功能全部必須仍可使用：
+
+* 新手教學
+* 英文課程
+* 注音課程
+* 中文課程
+* 自由測速
+* 自訂文章
+* 英文排行榜
+* 中文排行榜
+* 教師登入
+* 成績查詢
+* CSV
+* JSON backup
+* pending record retry
+* 手機版
+
+---
+
+## 36. 最後要求
+
+後續收到實作要求時，依第一輪範圍完成程式與驗證，不只交付計畫。本次整合文件不代表已啟動或完成第一輪。
+
+若遇到可以自行合理判斷的細節：
+
+自行做最佳工程判斷，不要停下來反覆詢問。
+
+只有遇到：
+
+* 會刪除 production data
+* 需要修改教師密碼
+* 需要新的付費服務
+* 需要使用者提供秘密金鑰
+
+才停止要求確認。
+
+其他情況請持續完成。
+
+完成後回報：
+
+1. Implemented
+2. Database changes
+3. Files changed
+4. Tests
+5. Production validation
+6. Commit SHA
+7. Remaining roadmap
+8. 下一階段建議
+
+並更新：
+
+`AGENT_HANDOFF.md`
