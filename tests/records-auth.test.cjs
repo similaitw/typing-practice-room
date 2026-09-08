@@ -22,6 +22,7 @@ test('cloud query accepts the session issued by teacher login and rejects tamper
       if(name==='../lib/teacher-credentials')return {readCredentials:async()=>({sessionKey:password})};
       if(name==='../lib/typing-schema')return {ensureAssignmentSchema:async()=>{}};
       if(name==='../lib/student-session')return {readStudentSession:async()=>null,sameOrigin:()=>true};
+      if(name==='../lib/mistake-analysis')return {cleanMistakes:value=>Array.isArray(value)?value:[]};
       throw Error('Unexpected dependency: '+name);
     },Buffer,URL,process:{env:{TEACHER_PASSWORD:password,TEACHER_SESSION_SECRET:secret,POSTGRES_URL:'test-only-database'}}});
     vm.runInContext(fs.readFileSync(path.join(__dirname,'../api/records.js'),'utf8'),context);
