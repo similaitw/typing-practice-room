@@ -12,52 +12,76 @@
 - Phase 3：教師作業完成度儀表板、課堂投影模式完成第一版。
 - Phase 4：英文錯鍵診斷、手指弱點分析完成第一版。
 - Phase 5：學生「我的弱鍵」、1／2 分鐘弱鍵特訓完成第一版。
-- 課程進度仍主要保存在 localStorage；Phase 6 尚未開始。
+- Phase 6：學生課程進度雲端同步完成第一版。
+- 下一階段：Phase 7 成長分析。
 
-## Phase 5｜學生「我的弱鍵」與弱鍵特訓
+## Phase 6｜學生課程進度雲端同步
 
 ### 修改
 
-- 新增 `weak-key-core.js`：純前端／Node 可共用的弱鍵練習產生器。會把英文大寫鍵正規化到同一實體字母鍵，保留 Shift 標點作為訓練目標，最多取前 4 個弱鍵。
-- 練習產生器使用本機單字集合、弱鍵重複與鍵位組合，自動產生約 1 分鐘（約 420 字元）或 2 分鐘（約 760 字元）教材；不呼叫外部 AI API。
-- 新增 `weak-key-practice.js`：首頁「我的任務」附近新增「我的弱鍵」，學生登入後顯示前 4 個弱鍵、錯按次數與負責手指。
-- 「開始弱鍵特訓」沿用既有自訂文章測速流程，因此不另外複製 timer、WPM、accuracy、Backspace 或錯鍵統計邏輯。
-- 啟動弱鍵特訓時會透過既有 UI 切到 custom／60 或 120 秒，因此若前一刻正在正式 assignment context，會觸發現有作業 context 清除邏輯，不會把弱鍵自由練習誤記成老師指定作業。
-- `GET /api/mistake-analytics?view=mine` 新增學生私有模式：student ID 完全由目前 8 小時 student session 決定，學生端傳入 `studentId`、`class` 等 query 不會改變查詢對象。
-- `view=mine` 沒有 student cookie 時會在 schema／成績查詢前直接回 401；有 cookie 才進一步驗證 student session。
-- 教師版 `/api/mistake-analytics` 仍維持先驗證教師 session 再做資料庫工作。
-- `teacher-auth.js` 模組載入順序改為 `cloud-students.js` → `assignments.js` → `assignment-dashboard.js` → `mistake-analytics.js` → `weak-key-core.js` → `weak-key-practice.js`。後段模組失敗仍不阻斷核心打字／作業功能。
-- Phase 5 暫不加入 180 秒；目前 `typing_records.duration` 與正式作業 schema 只允許 15／30／60／120 秒，先保持資料庫相容。
+- 新增 `lib/lesson-catalog.js`：server 端固定 15 個現有課程 ID 與語言白名單，避免任意 lesson ID 寫入資料庫。
+- 新增 `lib/progress-schema.js` 與 `database/progress.sql`，建立 `typing_progress`：
+  - `student_id`
+  - `lesson_id`
+  - `language`
+  - `completed_at`
+  - `best_accuracy`
+  - `best_speed`
+  - `attempts`
+  - `updated_at`
+  - `(student_id, lesson_id)` primary key
+- 新增 `api/progress.js`：
+  - `GET /api/progress` 只讀目前 student session 的進度。
+  - `POST action=merge` 將該學生本機個人快取補到雲端，既有 row 不重複增加 attempts。
+  - `POST action=complete` 記錄完成課程，更新最佳正確率／速度並增加完成次數。
+  - complete 只接受已知課程且正確率至少 90%。
+  - POST 必須帶預期 `studentId`，server 與目前 student session 完全比對；不一致直接 403。
+  - 沒有 student cookie 時在 progress schema／progress table 前直接回 401。
+- 新增 `cloud-progress.js`：
+  - 每位學生本機快取使用 `typingPracticeRoomLessonProgressByStudent`，格式為 `studentId -> {lessonId:true}`。
+  - 登入時先把該學生個人快取 merge 到雲端，再 GET 雲端進度並取聯集。
+  - 換電腦登入後可以恢復英文／注音與中文課程完成勾選。
+  - 離線時保留該學生個人快取；恢復連線後再同步。
+  - 完成課程後沿用既有 `#complete-lesson` 行為，不重寫課程計分／輸入邏輯。
+  - 模組包裝既有 `save()`，學生登入時顯示個人進度，但 base `typingPracticeRoomData.lessonProgress` 仍保存舊版共用／離線進度，不被學生個人進度污染。
+  - 舊版 `lessonProgress` 沒有學生歸屬資訊，刻意保留但不自動認領／上傳，避免共用電腦把前一位學生進度套給下一位。
+  - 登出後立即切回舊版／離線進度；登入後切回目前學生自己的進度。
+  - GET／POST 回傳 student identity 後前端再次核對預期 student ID；若同步途中切換學生，停止舊同步並重新抓目前 session，避免競態污染。
+- `weak-key-practice.js` 在自身邏輯開始前先載入 `cloud-progress.js`，因此即使弱鍵 UI 後續失效，Phase 6 仍可獨立載入。
+- `.github/workflows/test.yml` 已加入 progress tests 與新檔 syntax checks。
 
 ### 驗證
 
-- 新增 `tests/weak-key-practice.test.cjs`：
-  - 弱鍵正規化與去重。
-  - 1／2 分鐘教材長度與目標鍵覆蓋。
-  - Shift 標點可生成弱鍵練習。
-  - `view=mine` 強制使用 session student ID。
-  - 惡意 `studentId=其他人`／`class=其他班` query 被忽略。
-  - 缺少 student cookie 時，在成績查詢前回 401。
-- GitHub Actions run `34236581283`：新增弱鍵 privacy／generator 測試，success。
-- GitHub Actions run `34236621931`：Phase 5 CI 加入新 tests 與 syntax checks，success。
-- 安全授權順序調整後 run `34236868629`：Node tests、Syntax checks 全部 success。
-- Vercel 對 Phase 5 CI commit `961314d` 回報 deployment `success`；最終文件 commit 需再確認 deployment status。
-- 未使用、讀取或修改教師密碼／session secret。
-- 尚未用正式學生啟用碼人工完成「我的弱鍵 → 產生特訓 → 完成測速 → 弱鍵重新統計」Production E2E，因此此項不可標為人工通過。
+- 新增 `tests/progress.test.cjs`：
+  - 15 個現有課程 ID／語言白名單。
+  - complete 只接受已知課程、正確率至少 90%、合理速度。
+  - merge 去重並拒絕未知課程。
+  - 缺少 student cookie 時回 401。
+  - body 預期 student ID 與 session 不一致時回 403，且不查 progress table。
+  - 合法完成只使用目前 session student ID。
+- GitHub Actions run `34238865194`：最新 Phase 6 安全規則與測試全部 success；Node tests、Syntax checks 全綠。
+- Vercel 對 commit `34034c1` 回報 deployment `success`。
+- 中間 commit `c57d387` 曾因安全規則先改、舊測試尚未同步而 CI failure；後續 `34034c1` 已修正測試並全綠，不能把中間 failure 當成目前 HEAD 狀態。
+- 未讀取、顯示或修改教師密碼／session secret。
+- 尚未用真實學生啟用碼人工完成「電腦 A 完成課程 → 電腦 B 登入恢復進度 → 切換另一學生確認互不污染」Production E2E，因此此項不可標為人工通過。
 
-### Phase 5 主要 commits
+### Phase 6 主要 commits
 
-- `4b33eef` weak-key generator
-- `fdd0321` student private mistake analytics
-- `db37645` student weak-key UI
-- `6bae796` module loading
-- `cbfb2fd` privacy／generator tests
-- `961314d` CI
-- `1a19be3` authenticate before DB work
-- `876e00c` auth-order test fix
-- `08ecb7c` README
+- `c329a8b` lesson catalog
+- `c5b4cd6` progress schema helper
+- `b527b33` progress SQL
+- `ff9c943` private progress API
+- `a07fb51` cloud progress client
+- `e4b9d1a` module loading
+- `ff3441f` observer recursion fix
+- `fa62571` progress tests
+- `aad39c4` CI
+- `4d9167e` bind writes to active student session
+- `c57d387` cross-student race protection
+- `34034c1` updated security tests
+- `acfa517` README
 
-## Phase 1–4 接手摘要
+## Phase 1–5 接手摘要
 
 ### Phase 1｜雲端學生名單
 
@@ -87,6 +111,12 @@
 - 教師「錯鍵分析」可看班級／學生的最常錯鍵、手指分布與配對。
 - 中文因輸入法組字不做實體鍵位診斷。
 
+### Phase 5｜我的弱鍵／特訓
+
+- 學生 session 下顯示自己的前 4 個弱鍵。
+- 1／2 分鐘弱鍵特訓使用本機規則生成，不使用 AI API。
+- `view=mine` 強制使用目前 student session，不能 query 別人的弱鍵。
+
 ## 尚未人工 Production E2E
 
 仍建議以正式教師／學生 session 跑一次完整流程：
@@ -98,28 +128,33 @@
 5. 故意錯按並 Backspace 修正，確認學生結果與教師錯鍵分析一致。
 6. 回首頁確認「我的弱鍵」只顯示該學生資料。
 7. 啟動 1／2 分鐘弱鍵特訓，確認不是正式 assignment，完成後重新整理弱鍵統計。
+8. 在電腦 A 完成至少一課，確認 `typing_progress` 同步；換電腦 B 以同一學生 session 登入後恢復課程勾選。
+9. 在共用電腦切換另一學生，確認課程勾選切換成另一人的個人進度；舊版共用進度不會被自動認領。
 
 目前未使用真實教師密碼或學生啟用碼，所以以上不能標為已通過。
 
 ## 下一階段
 
-### Phase 6｜課程進度雲端同步
+### Phase 7｜成長分析
 
 建議下一個 Agent 先做：
 
-- 建立 `typing_progress`。
-- student session 下把 lesson progress 同步到 Postgres。
-- localStorage 保留離線 cache。
-- 學生換電腦後可恢復英文／注音課程進度。
-- 不要直接刪除現有 localStorage progress；採合併與相容 migration。
+- 個人 first → recent → improvement：絕對值與百分比。
+- 英文 WPM／中文 CPM 分開。
+- 15／30／60／120 秒分開，不把不同時長直接混成一個成長值。
+- 班級平均、median、正確率與完成率。
+- 日期範圍、語言、時長、最低正確率篩選。
+- 先做教師端分析，再延伸學生「我的紀錄」。
+- 不需要先引入大型 chart library；SVG／Canvas／CSS 即可。
 
 ## 其他持續待辦
 
 - Phase 4 前的歷史成績沒有錯鍵資料，不回填。
 - 公開排行榜排除停用學生尚未完成。
+- 舊版共用 `lessonProgress` 刻意不自動認領給學生；如未來要遷移，應做明確人工「這是我的舊進度」操作，不可自動猜測。
 - 正式作業速度／正確率仍由 client 計分；本系統不是正式考試防作弊工具。
 - 若未來要求更高可信度，再做 attempt token／server-side 核對。
 
 ## 歷史紀錄
 
-Phase 4 以前的完整逐次交接可從 Git commit `fd6acea`、`e7dc26d` 與更早的 `AGENT_HANDOFF.md` 歷史追溯。
+Phase 5 以前的完整逐次交接可從 Git commit `ca690a0`、`fd6acea`、`e7dc26d` 與更早的 `AGENT_HANDOFF.md` 歷史追溯。
