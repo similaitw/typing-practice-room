@@ -11,13 +11,18 @@ const response=()=>({headers:{},setHeader(k,v){this.headers[k]=v;},status(code){
 
 function loadAnalytics({session,rows=[]}){
   let recordQueries=0,lastValues=[];
+  const STUDENT_COOKIE='__Host-typing-student';
   const context=vm.createContext({module:{exports:{}},require:name=>{
     if(name==='node:crypto')return crypto;
     if(name==='@neondatabase/serverless')return {neon:()=>async(strings,...values)=>{recordQueries++;lastValues=values;return rows;}};
     if(name==='../lib/teacher-credentials')return {readCredentials:async()=>{throw Error('teacher credentials must not be read for student view');}};
     if(name==='../lib/typing-schema')return {ensureAssignmentSchema:async()=>{}};
     if(name==='../lib/mistake-analysis')return mistakeCore;
-    if(name==='../lib/student-session')return {readStudentSession:async()=>session};
+    if(name==='../lib/student-session')return {
+      STUDENT_COOKIE,
+      cookieValue:(header,name)=>{const part=(header||'').split(';').map(x=>x.trim()).find(x=>x.startsWith(name+'='));return part?part.slice(name.length+1):'';},
+      readStudentSession:async()=>session
+    };
     throw Error('Unexpected dependency: '+name);
   },Buffer,URL,process:{env:{POSTGRES_URL:'test-only-database'}}});
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../api/mistake-analytics.js'),'utf8'),context);
@@ -39,7 +44,7 @@ test('student mine analytics ignores attacker-supplied student and class filters
   const rows=[{student_id:'student-a',student_class:'701',student_name:'甲生',student_seat:'01',mistakes:[['r','t',3]],created_at:new Date().toISOString()}];
   const {handler,getQueries,getValues}=loadAnalytics({session:own,rows});
   const res=response();
-  await handler({method:'GET',url:'/api/mistake-analytics?view=mine&studentId=student-b&class=999',headers:{host:'typing.example',cookie:'student-cookie'}},res);
+  await handler({method:'GET',url:'/api/mistake-analytics?view=mine&studentId=student-b&class=999',headers:{host:'typing.example',cookie:'__Host-typing-student=valid-token'}},res);
   assert.equal(res.code,200);
   assert.equal(res.body.scope.mine,true);
   assert.equal(res.body.scope.studentId,'student-a');
@@ -52,7 +57,7 @@ test('student mine analytics ignores attacker-supplied student and class filters
   assert.ok(!getValues().includes('999'));
 });
 
-test('student mine analytics rejects missing student session before record query',async()=>{
+test('student mine analytics rejects missing student cookie before schema or record query',async()=>{
   const {handler,getQueries}=loadAnalytics({session:null});
   const res=response();
   await handler({method:'GET',url:'/api/mistake-analytics?view=mine',headers:{host:'typing.example'}},res);
