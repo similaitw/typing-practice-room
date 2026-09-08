@@ -41,15 +41,37 @@ function save() {
   try {localStorage.setItem(KEY, JSON.stringify(data));}
   catch {toast('瀏覽器無法儲存，請匯出 JSON 保存目前資料。');}
 }
-async function publishRecord(record) {
-  try {
-    const response = await fetch('/api/records', {method:'POST', headers:{'Content-Type':'application/json'}, credentials:'same-origin', body:JSON.stringify(record)});
-    if (!response.ok) throw Error();
-    toast('成績已同步到雲端。');
-  } catch {
-    toast('成績已保存在本機，但雲端同步失敗；請稍後重試或匯出備份。');
-  }
+const PENDING_KEY = 'typingPracticeRoomPendingRecords';
+let pendingRecords = [];
+try {pendingRecords = JSON.parse(localStorage.getItem(PENDING_KEY) || '[]'); if (!Array.isArray(pendingRecords)) pendingRecords = [];} catch {}
+let syncingRecords = false;
+function savePending() {
+  try {localStorage.setItem(PENDING_KEY, JSON.stringify(pendingRecords));}
+  catch {toast('待傳成績無法暫存，請保持此頁開啟並重試同步。');}
+  $('#cloud-sync-status').textContent = pendingRecords.length ? `有 ${pendingRecords.length} 筆成績等待存入資料庫；連線恢復後會自動重試。` : '成績預設存入資料庫，排行榜跨裝置共用。';
 }
+async function publishRecord(record) {
+  pendingRecords.push(record);
+  savePending();
+  await flushPendingRecords();
+}
+async function flushPendingRecords() {
+  if (syncingRecords || !pendingRecords.length) return;
+  syncingRecords = true;
+  let saved = false;
+  try {
+    while (pendingRecords.length) {
+      const record = pendingRecords[0];
+      const response = await fetch('/api/records', {method:'POST', headers:{'Content-Type':'application/json'}, credentials:'same-origin', body:JSON.stringify(record), signal:AbortSignal.timeout(15000)});
+      if (!response.ok) throw Error();
+      pendingRecords.shift(); savePending(); saved = true;
+    }
+    toast('成績已存入資料庫。');
+  } catch {savePending(); toast('成績尚未存入資料庫，已加入待傳佇列，稍後自動重試。');}
+  finally {syncingRecords = false; if (saved) renderPlayerRanking();}
+}
+window.addEventListener('online', flushPendingRecords);
+setInterval(() => {if (navigator.onLine) flushPendingRecords();}, 30000);
 async function syncCloudRecords() {
   try {
     const response = await fetch('/api/records', {credentials:'same-origin', cache:'no-store'});
@@ -331,12 +353,27 @@ $('#join-ranking').onsubmit = e => {
   activeStudent = person.id; fillStudents(); stats(); resetTest(); renderPlayerRanking();
   if (!$('#test-input').disabled) $('#test-input').focus();
 };
-function renderPlayerRanking() {
+let rankingRequest = 0;
+async function renderPlayerRanking() {
+  const request = ++rankingRequest;
   const language = $('#player-ranking-language').value, threshold = data.settings.threshold ?? 90;
-  const rows = C.rank(data.testRecords,language,threshold,data.students);
-  $('#player-ranking-rule').textContent = `個人最佳速度排名，最低正確率 ${threshold}%。同速先比正確率，再比紀錄時間；訪客不列入。`;
-  $('#player-ranking-list').innerHTML = rows.length ? rows.map((r,i) => `<div class="rank ${r.studentId === activeStudent ? 'rank-self' : ''}"><span class="rank-no">${i+1}</span><span class="rank-name"><strong>${escapeHtml(r.studentLabel)}${r.studentId === activeStudent ? '（目前練習者）' : ''}</strong><small>${formatDate(r.createdAt)}</small></span><span class="rank-speed"><strong>${r.speed}</strong><small>${r.unit}</small></span><span class="rank-accuracy">${r.accuracy}%</span></div>`).join('') : '<div class="empty">還沒有符合門檻的成績。填好姓名，完成一次測速就能挑戰上榜！</div>';
+  $('#player-ranking-rule').textContent = `資料庫排行榜 · 個人最佳速度，最低正確率 ${threshold}%。同速先比正確率，再比紀錄時間；訪客及未填完整身分者不列入。最多顯示 2,000 位。`;
+  $('#player-ranking-list').innerHTML = '<div class="empty">正在讀取資料庫排行榜…</div>';
+  try {
+    const response = await fetch(`/api/records?view=leaderboard&language=${language}&threshold=${threshold}`, {cache:'no-store', signal:AbortSignal.timeout(15000)});
+    if (!response.ok) throw Error();
+    const rows = await response.json();
+    if (request !== rankingRequest) return;
+    const student = data.students.find(s => s.id === activeStudent);
+    const isSelf = r => student && r.studentClass === student.className && r.studentName === student.name && r.studentSeat === student.seat;
+    $('#player-ranking-list').innerHTML = rows.length ? rows.map((r,i) => `<div class="rank ${isSelf(r) ? 'rank-self' : ''}"><span class="rank-no">${i+1}</span><span class="rank-name"><strong>${escapeHtml(r.studentLabel)}${isSelf(r) ? '（目前練習者）' : ''}</strong><small>${formatDate(r.createdAt)}</small></span><span class="rank-speed"><strong>${escapeHtml(r.speed)}</strong><small>${escapeHtml(r.unit)}</small></span><span class="rank-accuracy">${escapeHtml(r.accuracy)}%</span></div>`).join('') : '<div class="empty">資料庫尚無符合門檻的成績。填好班級、姓名與座號，完成測速並同步後即可上榜。</div>';
+  } catch {
+    if (request === rankingRequest) $('#player-ranking-list').innerHTML = '<div class="empty">暫時無法讀取資料庫排行榜，請檢查連線後按「重新同步／整理」。待傳成績尚未列入排名。</div>';
+  }
 }
+$('#retry-cloud-sync').onclick = async () => {await flushPendingRecords(); renderPlayerRanking();};
+savePending();
+flushPendingRecords();
 $('#player-ranking-language').onchange = renderPlayerRanking;
 document.addEventListener('keydown', e => {if (e.ctrlKey && e.key === 'Enter' && $('#test').classList.contains('active')) {e.preventDefault(); resetTest(); $('#test-input').focus();}});
 function fillStudents() {

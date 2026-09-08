@@ -64,6 +64,27 @@ module.exports = async function handler(req, res) {
     } catch (error) {return res.status(502).json({error: error.message || '雲端資料服務目前無法使用。'});}
   }
   if (req.method !== 'GET') {res.setHeader('Allow', 'GET, POST'); return res.status(405).json({error: '不支援此操作。'});}
+  const publicQuery = new URL(req.url, `https://${req.headers.host}`).searchParams;
+  if (publicQuery.get('view') === 'leaderboard') {
+    const language = publicQuery.get('language') === 'zh' ? 'zh' : 'en';
+    const requestedThreshold = Number(publicQuery.get('threshold') ?? 90);
+    const threshold = Number.isInteger(requestedThreshold) && requestedThreshold >= 0 && requestedThreshold <= 100 ? requestedThreshold : 90;
+    try {
+      const rows = await sql`WITH best AS (
+        SELECT student_class, student_name, student_seat, speed, unit, accuracy, created_at,
+          ROW_NUMBER() OVER (PARTITION BY student_class, student_name, student_seat
+            ORDER BY speed DESC, accuracy DESC, created_at DESC, id) AS position
+        FROM typing_records WHERE language = ${language} AND accuracy >= ${threshold}
+          AND student_id IS NOT NULL AND student_class <> '' AND student_name <> '' AND student_seat <> ''
+      ) SELECT student_class, student_name, student_seat, speed, unit, accuracy, created_at
+        FROM best WHERE position = 1 ORDER BY speed DESC, accuracy DESC, created_at DESC,
+          student_class, student_name, student_seat LIMIT 2000`;
+      return res.status(200).json(rows.map(row => ({studentClass:row.student_class,
+        studentName:row.student_name, studentSeat:row.student_seat,
+        studentLabel:[row.student_class,row.student_name,row.student_seat+'號'].join(' ｜ '),
+        speed:row.speed,unit:row.unit,accuracy:row.accuracy,createdAt:row.created_at})));
+    } catch {return res.status(502).json({error:'排行榜資料庫暫時無法使用，請稍後重試。'});}
+  }
   let credentials;
   try {credentials = await readCredentials();}
   catch {return res.status(503).json({error:'目前無法讀取教師登入設定，請稍後再試。'});}

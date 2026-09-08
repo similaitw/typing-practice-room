@@ -84,7 +84,7 @@ GitHub Pages 僅能提供學生端靜態功能，不支援本專案教師登入 
 - `POSTGRES_URL`：Vercel Postgres／Neon 提供的資料庫連線字串；也支援 `DATABASE_URL`
 - 原有的 `TEACHER_PASSWORD` 與 `TEACHER_SESSION_SECRET` 仍需保留
 
-`POST /api/records` 由測驗完成流程使用；`GET /api/records` 需要教師登入，支援 `studentId`、`language`、`duration`、`from`、`to` 查詢參數。雲端不可用時，學生仍可使用本機快取，畫面會提示同步失敗。
+`POST /api/records` 由測驗完成流程使用；`GET /api/records` 需要教師登入，支援 `studentId`、`language`、`duration`、`from`、`to` 查詢參數。學生排行榜使用公開的 `GET /api/records?view=leaderboard&language=en&threshold=90`，只回傳排名所需欄位，以班級、姓名、座號合併跨裝置最佳紀錄，最多 2,000 位；完整紀錄仍需教師登入。完成測驗預設寫入資料庫；失敗存於 `typingPracticeRoomPendingRecords` 待傳佇列，重開頁面、恢復連線或每 30 秒會重試，也可按「重新同步／整理」。待傳成績不列入資料庫排行榜。舊版僅留在本機且未成功同步的紀錄不會自動回補。
 
 ## 驗證
 
