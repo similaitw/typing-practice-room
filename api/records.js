@@ -68,6 +68,7 @@ module.exports = async function handler(req, res) {
         await ensureAssignmentSchema(sql);
         const studentSession = await readStudentSession(sql, req.headers.cookie);
         if (!studentSession) return res.status(401).json({error:'正式作業需要先使用學生啟用碼登入。'});
+        if (record.studentId !== studentSession.studentId) return res.status(403).json({error:'待傳作業與目前學生登入身分不一致，請切回原學生後再同步。'});
         const assignments = await sql`SELECT a.* FROM typing_assignments a
           JOIN typing_assignment_targets t ON t.assignment_id = a.id
           WHERE a.id = ${record.assignmentId} AND a.active = true AND t.student_class = ${studentSession.student.className}
@@ -129,7 +130,7 @@ module.exports = async function handler(req, res) {
   const from = query.get('from') && Number.isFinite(Date.parse(query.get('from'))) ? new Date(query.get('from')).toISOString() : null;
   const to = query.get('to') && Number.isFinite(Date.parse(query.get('to'))) ? new Date(query.get('to')).toISOString() : null;
   try {
-    if (assignmentId) await ensureAssignmentSchema(sql);
+    await ensureAssignmentSchema(sql);
     const rows = await sql`SELECT * FROM typing_records
       WHERE (${studentId}::text IS NULL OR student_id = ${studentId})
         AND (${language}::text IS NULL OR language = ${language})
