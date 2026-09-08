@@ -19,7 +19,7 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Node tests
-        run: node --test tests/core.test.cjs tests/teacher-auth.test.cjs tests/records-auth.test.cjs tests/students-api.test.cjs tests/assignments.test.cjs tests/assignment-dashboard.test.cjs tests/mistake-analysis.test.cjs
+        run: node --test tests/core.test.cjs tests/teacher-auth.test.cjs tests/records-auth.test.cjs tests/students-api.test.cjs tests/assignments.test.cjs tests/assignment-dashboard.test.cjs tests/mistake-analysis.test.cjs tests/weak-key-practice.test.cjs
       - name: Syntax checks
         run: |
           node --check app.js
@@ -30,6 +30,8 @@ jobs:
           node --check assignments.js
           node --check assignment-dashboard.js
           node --check mistake-analytics.js
+          node --check weak-key-core.js
+          node --check weak-key-practice.js
           node --check api/records.js
           node --check api/students.js
           node --check api/assignments.js
