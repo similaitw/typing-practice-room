@@ -2,6 +2,44 @@
 
 > 工作區規則：每次修改網站程式、樣式、資料或部署設定後，必須在本檔新增一筆紀錄。紀錄要包含日期、修改內容、驗證方式、Git 狀態與尚未完成事項，方便切換 Agent 後快速接手。
 
+## 2026-09-08｜Phase 2 教師派作業與學生「我的任務」第一版
+
+### 修改
+
+- 新增 `lib/typing-schema.js` 與 `database/assignments.sql`，建立 `typing_assignments`、`typing_assignment_targets`、`typing_student_access`、`typing_student_sessions`，並以相容 migration 為 `typing_records` 增加 nullable `assignment_id` 與索引；既有成績不刪除、不重建。
+- 新增 `api/assignments.js`：教師可建立、查看、修改、停用／重新啟用測速作業；第一版支援英文／中文、15／30／60／120 秒、最低正確率、最低速度、有效次數、開始／截止時間與多班指派。學生端 `GET /api/assignments?view=mine` 只在有效學生 session 下回傳該生所屬班級的作業與 `未開始／進行中／已完成／已逾期` 狀態。
+- 新增 `api/student-access.js` 與 `lib/student-session.js`：教師為單一啟用中學生產生一次性隨機啟用碼，資料庫只保存 SHA-256 hash；明碼 7 天內可兌換一次，兌換後建立 HttpOnly、Secure、SameSite=Strict 的 8 小時學生 session。重新發碼會撤銷該生舊 session；學生可按「結束使用」撤銷目前 session。
+- 新增 `assignments.js`：首頁「我的任務」登入與任務卡、教師端「作業管理」分頁、作業建立／編輯／停用、一次性學生啟用碼發放，以及一鍵把指定語言／秒數帶入既有測速流程。
+- `teacher-auth.js` 改為頁面 load 後先載入 `cloud-students.js`，再載入 `assignments.js`，避免外掛模組早於 `app.js` globals。
+- `api/records.js` 支援 `assignmentId`：自由練習維持既有公開寫入；正式作業成績必須有學生 session、student ID 必須與 session 完全一致，伺服器再覆蓋班級／姓名／座號並核對作業語言、秒數與 builtin 類型。正式作業建立時間改用伺服器時間；相同 record ID 仍以 `ON CONFLICT DO NOTHING` 去重。
+- 待傳正式作業若在共用電腦換成另一學生登入，伺服器會因 student ID 不一致回 403，不會把前一位學生的待傳紀錄錯掛到目前學生。
+- 教師完整成績查詢現在會先安全執行 assignment schema 相容檢查，避免 Production 尚未新增 `assignment_id` 時查詢舊資料表失敗；schema 初始化在單一 Vercel instance 內以 Promise 快取，冷啟動失敗仍可重試。
+- 所有新增 POST／PATCH 流程加入同源檢查；學生作業列表不提供匿名全校／全班名單。
+- 新增 `tests/assignments.test.cjs`，並擴充 GitHub Actions 測試／syntax check 範圍。
+
+### 驗證
+
+- `tests/assignments.test.cjs` 驗證作業欄位、班級去重、門檻／秒數拒絕、`assignmentId` 驗證與學生 cookie helper。
+- 舊 `tests/records-auth.test.cjs` 已更新 mock 依賴，確認新增 schema/session helper 不破壞原教師成績授權測試。
+- GitHub Actions run `34231444450`：Node tests、Syntax checks 全部 success（含待傳作業身分綁定與 schema 相容修補）。
+- GitHub Actions run `34231524301`：Node tests、Syntax checks 全部 success（含 schema instance cache）。
+- Vercel 對 commit `8e52945` 回報 deployment status `success`。
+- 未讀取、顯示或變更教師密碼／session secret；未使用正式教師密碼做 production assignment 寫入，因此尚未完成真實教師→學生完整 E2E。
+
+### Git／部署
+
+- Phase 2 主要 commits：`92325f3`（schema helper）、`4655b88`（一次性學生啟用碼）、`7509021`（作業 API）、`78ff3dc`／`eeba824`（assignment 成績與安全修補）、`64f4fc7`（前端 UI）、`8e52945`（schema cache）。
+- 已全部推送 `main`；Vercel 對目前已檢查 HEAD 回報 success，正式站仍為 `https://typing-practice-room.vercel.app`。
+
+### 待辦／下一階段
+
+- 必做 production 人工驗收：教師登入→確認雲端名單→建立一份 701 英文 60 秒／90%／20 WPM／3 次作業→替一位 701 學生產生啟用碼→學生兌換→完成 1／3、2／3、3／3→重新整理與另一瀏覽器確認狀態一致。因本次未使用真實教師密碼，不能把這項標為已通過。
+- Phase 3「教師作業完成度儀表板／課堂投影模式」尚未做；目前教師可管理作業，但不會在作業列表直接顯示每位學生完成表。
+- 第一版正式作業會驗證學生 session、作業歸屬、語言與秒數，但速度／正確率仍源自既有 client 計分；本系統仍不是正式考試防作弊系統。後續若要提高可信度，再做 attempt token／伺服器核對策略。
+- 一次性啟用碼具高隨機性且只存 hash，但目前沒有額外 Postgres rate-limit table；若未來公開大量使用，可依安全規格第 37 節補跨 serverless instance 限流。
+- 學生按「結束使用」後需要教師重新發新的單次啟用碼；這是目前共用電腦優先的安全取捨。
+- 停用學生是否排除「公開排行榜」仍沿用 Phase 1 待辦；課程進度仍在 localStorage。
+
 ## 2026-09-08｜Phase 1 雲端學生名單第一版
 
 ### 修改
