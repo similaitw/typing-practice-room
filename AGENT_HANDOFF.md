@@ -2,7 +2,44 @@
 
 > 工作區規則：每次修改網站程式、樣式、資料或部署設定後，必須在本檔新增一筆紀錄。紀錄要包含日期、修改內容、驗證方式、Git 狀態與尚未完成事項，方便切換 Agent 後快速接手。
 
+## 2026-09-08｜Phase 1 雲端學生名單第一版
 
+### 修改
+
+- 新增 `database/cloud-students.sql` 與教師專用 `api/students.js`，建立 `typing_students`：學生 ID、班級、座號、姓名、啟用狀態、建立／更新時間；班級＋座號＋姓名有唯一索引。
+- `/api/students` 的 GET／POST／PATCH 全部要求有效教師 session；未登入不讀名單。POST 每次最多 200 位，前端會分批送出；PATCH 用於編輯、停用與恢復，不提供直接 DELETE。
+- API 在通過教師驗證後會以 `CREATE ... IF NOT EXISTS` 確認 schema，因此 Production 不需要另外手動執行 migration 才能首次啟用；SQL 檔仍保留供部署／稽核使用。
+- 新增 `cloud-students.js`，在 `app.js` 初始化完成後掛入現有教師介面。第一次教師登入會把該瀏覽器既有 localStorage 名單合併至雲端，之後以雲端啟用名單作為教師端正式來源，本機資料保留為快取／離線 fallback。
+- 教師編輯學生時同步更新同 student ID 的成績顯示欄位；若不同裝置曾以不同 ID 建立完全相同身分，匯入時會採雲端既有 ID，並嘗試把同身分舊紀錄歸一到 canonical ID。
+- 原「刪除學生」改為「停用」：歷史成績保留，學生移出一般名單；教師端新增「已停用學生」區，可恢復。
+- 「清除全部資料」在雲端名單模式改為「清除這台瀏覽器資料」，不刪除雲端名單與資料庫成績。
+- `teacher-auth.js` 在 window load 後載入 `cloud-students.js`，避免 script 順序早於 `app.js`。
+- 新增 `.github/workflows/test.yml`，main push／PR 自動執行 Node tests 與 JS syntax checks。
+- 更新 README 說明雲端名單、停用／恢復、資料邊界與新的驗證命令。
+
+### 驗證
+
+- 新增 `tests/students-api.test.cjs`：學生欄位驗證、未登入不得查詢 roster table、真實教師 session cookie 可讀取雲端名單。
+- GitHub Actions run `34229485842`：完成，success。
+- GitHub Actions run `34229666000`：`npm ci`、Node tests、Syntax checks 全部 success。
+- 最新 README commit `a1f716c` 的 Vercel status：success。
+- 未使用或變更教師密碼、session secret；未以正式教師帳號進行 production 名單寫入 smoke test。
+- 因 `/api/students` 先驗證教師 session 才 `ensureSchema`，正式 `typing_students` table 會在第一次合法教師名單請求時自動建立；目前不能僅由未登入檢查斷言 production table 已建立。
+
+### Git／部署
+
+- 功能與文件已連續推送 `main`；Phase 1 主要 commits 從 `36ef3ef`（schema）到 `a1f716c`（README）。
+- Vercel 對最新已檢查 commit 回報 success，正式站沿用 `https://typing-practice-room.vercel.app`。
+- GitHub Actions 已建立並成功跑過兩次，可作為後續 Codex／Agent 共用驗收門檻。
+
+### 待辦／Phase 1 尚未完整收尾
+
+- 尚未用真實教師登入在 Production 實際新增／編輯／停用／恢復一位測試學生，因此跨兩台瀏覽器的 production E2E 尚未人工驗證。
+- 公開排行榜目前仍直接依 `typing_records` 身分欄位計算；本版停用學生已從教師／一般選單移除，但「停用狀態是否同步排除公開排行榜」尚未接入，避免在 `typing_students` table 首次建立前讓既有排行榜查詢失敗。下一步可在 records API 加安全的 schema 初始化／inactive 排除。
+- 學生在測速頁自行新增的身分仍先存本機，會在教師下次登入同一瀏覽器時併入雲端；尚未提供匿名公開學生名單 API，這是刻意的隱私界線。
+- 課程進度仍為 localStorage，未進入本 Phase。
+- Phase 2 教師派作業、assignment_id 與學生「我的任務」尚未開始。
+- 下一個 Agent 若要繼續，先做一次 Production 教師名單 smoke test，再決定補 inactive 公開排行規則或直接進 Phase 2 assignment schema。
 
 
 ## 2026-09-08｜開發規格安全檢查（僅文件）
