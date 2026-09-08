@@ -19,7 +19,7 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Node tests
-        run: node --test tests/core.test.cjs tests/teacher-auth.test.cjs tests/records-auth.test.cjs tests/students-api.test.cjs
+        run: node --test tests/core.test.cjs tests/teacher-auth.test.cjs tests/records-auth.test.cjs tests/students-api.test.cjs tests/assignments.test.cjs
       - name: Syntax checks
         run: |
           node --check app.js
@@ -27,5 +27,10 @@ jobs:
           node --check data.js
           node --check teacher-auth.js
           node --check cloud-students.js
+          node --check assignments.js
           node --check api/records.js
           node --check api/students.js
+          node --check api/assignments.js
+          node --check api/student-access.js
+          node --check lib/typing-schema.js
+          node --check lib/student-session.js
