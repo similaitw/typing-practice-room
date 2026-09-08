@@ -3,7 +3,7 @@ const LESSONS=[
 {id:'reach',group:'en',title:'食指延伸',sub:'Reach out',desc:'食指往左右伸展，認識 G、H、R、T、Y、U 與更多鄰居。',keys:'G H R T Y U V B N M',fingers:'食指負責最寬的活動範圍',text:'fg hj fr gt hy ju vb bn nm gh rh th',goal:'保持手腕自然平直，讓食指完成延伸'},
 {id:'top',group:'en',title:'上排鍵',sub:'Top row',desc:'向上探索 QWERTY，讓手指學會回到基準鍵。',keys:'Q W E R T Y U I O P',fingers:'每次按鍵後，手指回到基準鍵',text:'we type quiet work your power quite true',goal:'輸入常用單字，準確率達到 90%'},
 {id:'bottom',group:'en',title:'下排鍵',sub:'Bottom row',desc:'補齊字母地圖，練習 Z、X、C、V 以及標點。',keys:'Z X C V B N M , . /',fingers:'保持雙手放鬆，不要用力敲擊',text:'mix civic box brave next move, nice.',goal:'完成一段含標點的練習文字'},
-{id:'symbols',group:'en',title:'數字列與特殊符號',sub:'Shift & symbols',desc:'先切換英文半形輸入，用另一手的小指按住 Shift，再按數字列上對應的鍵。Caps Lock 不能代替 Shift 輸入符號。',keys:'! @ # $ % ^ & * ( ) ~ _ +',fingers:'左手按鍵搭配右 Shift；右手按鍵搭配左 Shift',text:'! @ # $ % ^ & * ( ) ~ _ + 1! 2@ 3# 4$ 5% 6^ 7& 8* 9( 0) 50% + 50% = 100%',goal:'練習數字與符號切換，正確使用另一手的 Shift'},
+{id:'symbols',group:'en',title:'數字列與特殊符號',sub:'Shift & symbols',desc:'先切換英文半形輸入，用另一手的小指按住 Shift，再按數字列或標點鍵。Caps Lock 不能代替 Shift 輸入符號。',keys:'! @ # $ % ^ & * ( ) ~ _ + { } | : " < > ?',fingers:'左手按鍵搭配右 Shift；右手按鍵搭配左 Shift',text:'! @ # $ % ^ & * ( ) ~ _ + 1! 2@ 3# 4$ 5% 6^ 7& 8* 9( 0) 50% + 50% = 100% { } | : " < > ? {hello} "Hi!" 1 < 2 > 0 | Yes?',goal:'練習數字與符號切換，正確使用另一手的 Shift'},
 {id:'words',group:'en',title:'常用單字',sub:'Everyday words',desc:'把鍵位組合成有意義的字，速度會自然長出來。',keys:'the · and · you · with',fingers:'眼睛看前方，手指記住節奏',text:'the quick brown fox jumps over the lazy dog. practice makes progress.',goal:'不看鍵盤完成一整行單字'},
 {id:'sentences',group:'en',title:'英文短句',sub:'Full sentences',desc:'把大小寫、空格與標點一起放進真實句子。',keys:'SHIFT + letters + punctuation',fingers:'小指負責 Shift，另一手輸入字母',text:'Small steps become strong habits. Keep your hands light and your eyes ahead.',goal:'完成完整句子並保持 90% 以上正確率'},
 {id:'zh-home',group:'zh',rawKeys:true,title:'注音鍵位',sub:'Bopomofo map',desc:'先熟悉注音符號在鍵盤上的位置，請切換英文輸入，依標準注音按鍵練習。',keys:'ㄅ ㄆ ㄇ ㄈ   ㄉ ㄊ ㄋ ㄌ',fingers:'實體按鍵：1 Q A Z ｜ 2 W S X',text:'ㄅㄆㄇㄈ ㄉㄊㄋㄌ ㄍㄎㄏ ㄐㄑㄒ',goal:'看著注音符號，找到對應按鍵'},
@@ -31,5 +31,5 @@ for (let i = 0; i < EN_TEXTS.length; i++) {
   EN_TEXTS[i] += ' ' + ['Place your fingers on the home row and keep your shoulders relaxed.', 'Read the next word before you type it. Every space and punctuation mark has a place.', 'If a letter is wrong, use Backspace and try again. Take a short break when you need one.', 'Compare your work with your own earlier practice. A calm rhythm helps you learn.'].join(' ');
 }
 
-// Standard US English layout; top-row shifted symbols.
-const SHIFT_PAIRS = [['`','~'],['1','!'],['2','@'],['3','#'],['4','$'],['5','%'],['6','^'],['7','&'],['8','*'],['9','('],['0',')'],['-','_'],['=','+']];
+// Standard US English layout; shifted symbols on number and punctuation keys.
+const SHIFT_PAIRS = [["`", "~"], ["1", "!"], ["2", "@"], ["3", "#"], ["4", "$"], ["5", "%"], ["6", "^"], ["7", "&"], ["8", "*"], ["9", "("], ["0", ")"], ["-", "_"], ["=", "+"], ["[", "{"], ["]", "}"], ["\\", "|"], [";", ":"], ["'", "\""], [",", "<"], [".", ">"], ["/", "?"]];

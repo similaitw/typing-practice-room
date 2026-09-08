@@ -99,8 +99,8 @@ $('#tutorial-input').oninput = e => {
 };
 $('#tutorial-symbol-lesson').onclick = () => {lessonId = 'symbols'; show('lessons');};
 $('#symbol-input').oninput = e => {
-  const value = e.target.value, target = '! @ # $ % ^ & * ( )';
-  $('#symbol-feedback').textContent = !value ? '先練 !，再依序輸入其他符號；這裡不計時、不存成績。' : value === target ? '✓ 全部正確！你已學會數字列符號，可以前往下一步。' : target.startsWith(value) ? '目前都正確。繼續用另一手的 Shift，留意符號之間的空格。' : '有字元不一致：檢查 Shift、半形符號與空格，用 Backspace 修正。';
+  const value = e.target.value, target = '! @ # $ % ^ & * ( ) { } | : " < > ?';
+  $('#symbol-feedback').textContent = !value ? '先練 !，再依序輸入其他符號；這裡不計時、不存成績。' : value === target ? '✓ 全部正確！你已學會數字列與標點符號，可以前往下一步。' : target.startsWith(value) ? '目前都正確。繼續用另一手的 Shift，留意符號之間的空格。' : '有字元不一致：檢查 Shift、半形符號與空格，用 Backspace 修正。';
 };
 function stats() {
   const rec = data.testRecords.filter(r => r.studentId === (activeStudent || null));
@@ -139,7 +139,7 @@ const keyRows = [
 const shiftedKeys = Object.fromEntries(SHIFT_PAIRS.map(([key,symbol]) => [symbol,key]));
 const bopomofo = Object.fromEntries(C.chars('1qaz2wsxedcrfv5tgbyhnujm8ik,9ol.0p;/-3467').map((k,i) => [k,C.chars('ㄅㄆㄇㄈㄉㄊㄋㄌㄍㄎㄏㄐㄑㄒㄓㄔㄕㄖㄗㄘㄙㄧㄨㄩㄚㄛㄜㄝㄞㄟㄠㄡㄢㄣㄤㄥㄦˇˋˊ˙')[i]]));
 function fingerFor(key) {
-  const groups = [['1qaz','左手小指'],['2wsx','左手無名指'],['3edc','左手中指'],['45rtfgvb','左手食指'],['67yuhjnm','右手食指'],['8ik,','右手中指'],['9ol.','右手無名指'],['0p;/-','右手小指']];
+  const groups = [['1qaz','左手小指'],['2wsx','左手無名指'],['3edc','左手中指'],['45rtfgvb','左手食指'],['67yuhjnm','右手食指'],['8ik,','右手中指'],['9ol.','右手無名指'],["0p;/-=[]\\'",'右手小指']];
   if (key === '`') return '左手小指';
   if (key === '=') return '右手小指';
   return key === ' ' ? '拇指按空白鍵' : groups.find(([keys]) => keys.includes(key.toLowerCase()))?.[1] || '請使用自己的輸入法選字／標點配置';
@@ -149,7 +149,7 @@ function fingerCode(key) {
   return label.startsWith('左手') ? '左' + label.slice(2, 3) : label.startsWith('右手') ? '右' + label.slice(2, 3) : '';
 }
 function shiftReferenceHTML() {
-  return `<div class="shift-map" aria-label="數字列上下層符號對照">${SHIFT_PAIRS.map(([key,symbol]) => `<div class="shift-key"><strong>${escapeHtml(symbol)}</strong><span>${escapeHtml(key)}</span></div>`).join('')}</div><p class="shift-caption">上排：按住 Shift 的結果 ／ 下排：直接按鍵的結果。例：Shift + 2 = @。不同語系鍵盤配置可能不同。</p>`;
+  return `<div class="shift-map" aria-label="數字列與標點鍵上下層符號對照">${SHIFT_PAIRS.map(([key,symbol]) => `<div class="shift-key"><strong>${escapeHtml(symbol)}</strong><span>${escapeHtml(key)}</span></div>`).join('')}</div><p class="shift-caption">上排：按住 Shift 的結果 ／ 下排：直接按鍵的結果。例：Shift + 2 = @。不同語系鍵盤配置可能不同。</p>`;
 }
 function keyboardHTML(l) {
   const renderKey = k => `<span class="keyboard-key" data-key="${escapeHtml(k)}" title="${escapeHtml(k.toUpperCase())}：${escapeHtml(fingerFor(k))}${l.group === 'zh' && bopomofo[k] ? '／' + bopomofo[k] : ''}">${l.group === 'en' ? `<small class="finger-badge">${escapeHtml(fingerCode(k))}</small>` : ''}${l.group === 'en' && SHIFT_PAIRS.some(([key]) => key === k) ? `<small class="shift-symbol">${escapeHtml(SHIFT_PAIRS.find(([key]) => key === k)[1])}</small>` : ''}<b>${escapeHtml(k.toUpperCase())}</b>${l.group === 'zh' ? `<small>${escapeHtml(bopomofo[k] || '')}</small>` : ''}</span>`;
