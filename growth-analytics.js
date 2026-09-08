@@ -16,7 +16,7 @@
 
   async function requestGrowth(){
     const params=new URLSearchParams();
-    for(const [name,selector] of [['class','#growth-class'],['studentId','#growth-student'],['language','#growth-language'],['duration','#growth-duration'],['threshold','#growth-threshold']]){
+    for(const [name,selector] of [['class','#growth-class'],['studentId','#growth-student'],['language','#growth-language'],['duration','#growth-duration'],['source','#growth-source'],['threshold','#growth-threshold']]){
       const value=document.querySelector(selector)?.value;if(value)params.set(name,value);
     }
     const from=document.querySelector('#growth-from')?.value,to=document.querySelector('#growth-to')?.value;
@@ -59,7 +59,8 @@
       ['平均正確率',s.averageAccuracy===null?'—':`${s.averageAccuracy}%`]
     ].map(([label,value])=>`<div><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join('');
     const tbody=result.students.map(row=>`<tr><td>${escapeHtml(row.className||'')}</td><td>${escapeHtml(row.seat||'')}</td><td>${escapeHtml(row.name)}</td><td>${row.tests}</td><td>${fmt(row.firstSpeed)}</td><td>${fmt(row.recentSpeed)}</td><td class="${changeClass(row.improvement)}">${signed(row.improvement)}</td><td class="${changeClass(row.improvementPercent)}">${row.improvementPercent===null?'—':signed(row.improvementPercent)+'%'}</td><td>${fmt(row.bestSpeed)}</td><td>${row.averageAccuracy===null?'—':row.averageAccuracy+'%'}</td></tr>`).join('');
-    document.querySelector('#growth-detail').innerHTML=result.students.length?`<div class="growth-table-wrap"><table class="growth-table"><thead><tr><th>班級</th><th>座號</th><th>姓名</th><th>有效測驗</th><th>首次 ${unit}</th><th>最近 ${unit}</th><th>變化</th><th>成長率</th><th>最佳</th><th>平均正確率</th></tr></thead><tbody>${tbody}</tbody></table></div><p class="growth-note">首次與最近都只在目前相同語言、秒數、正確率門檻與日期範圍內比較；只有 1 筆有效紀錄時不計成長率。班級平均與中位數以每位學生的最近值計算，不會讓練習次數多的學生被重複加權。</p>`:'<div class="empty">目前篩選範圍沒有學生。</div>';
+    const sourceCopy=result.filters.source==='all'?'標準題庫＋自訂文章':'只含標準題庫';
+    document.querySelector('#growth-detail').innerHTML=result.students.length?`<div class="growth-table-wrap"><table class="growth-table"><thead><tr><th>班級</th><th>座號</th><th>姓名</th><th>有效測驗</th><th>首次 ${unit}</th><th>最近 ${unit}</th><th>變化</th><th>成長率</th><th>最佳</th><th>平均正確率</th></tr></thead><tbody>${tbody}</tbody></table></div><p class="growth-note">${sourceCopy}。首次與最近都只在目前相同語言、秒數、正確率門檻與日期範圍內比較；只有 1 筆有效紀錄時不計成長率。班級平均與中位數以每位學生的最近值計算，不會讓練習次數多的學生被重複加權。</p>`:'<div class="empty">目前篩選範圍沒有學生。</div>';
     document.querySelector('#growth-status').textContent=`更新：${new Date(result.generatedAt).toLocaleTimeString('zh-TW')}`;
   }
 
@@ -76,12 +77,12 @@
     const tab=document.createElement('button');tab.className='tab';tab.dataset.panel='growth';tab.textContent='成長分析';teacher.querySelector('.tabs')?.append(tab);
     const panel=document.createElement('div');panel.id='panel-growth';panel.className='panel';
     panel.innerHTML=`<div class="card"><div class="card-head"><div><p class="eyebrow">GROWTH ANALYTICS</p><h2>班級與個人成長分析</h2><p>同語言、同秒數分開比較，避免把不同測驗條件混在一起。</p></div></div>
-      <div class="growth-controls"><label>班級<select id="growth-class"><option value="">全部班級</option></select></label><label>學生<select id="growth-student"><option value="">全部學生</option></select></label><label>語言<select id="growth-language"><option value="en">英文 WPM</option><option value="zh">中文 CPM</option></select></label><label>測驗時間<select id="growth-duration"><option value="15">15 秒</option><option value="30">30 秒</option><option value="60" selected>60 秒</option><option value="120">120 秒</option></select></label><label>最低正確率<input id="growth-threshold" type="number" min="0" max="100" value="90"></label><label>開始日期<input id="growth-from" type="date"></label><label>結束日期<input id="growth-to" type="date"></label><button id="growth-refresh" class="btn primary" type="button">更新分析</button></div>
+      <div class="growth-controls"><label>班級<select id="growth-class"><option value="">全部班級</option></select></label><label>學生<select id="growth-student"><option value="">全部學生</option></select></label><label>語言<select id="growth-language"><option value="en">英文 WPM</option><option value="zh">中文 CPM</option></select></label><label>測驗時間<select id="growth-duration"><option value="15">15 秒</option><option value="30">30 秒</option><option value="60" selected>60 秒</option><option value="120">120 秒</option></select></label><label>測驗來源<select id="growth-source"><option value="builtin" selected>標準題庫</option><option value="all">全部來源</option></select></label><label>最低正確率<input id="growth-threshold" type="number" min="0" max="100" value="90"></label><label>開始日期<input id="growth-from" type="date"></label><label>結束日期<input id="growth-to" type="date"></label><button id="growth-refresh" class="btn primary" type="button">更新分析</button></div>
       <div id="growth-summary" class="growth-summary"></div><div id="growth-detail"></div><p id="growth-status" role="status"></p></div>`;
     teacher.querySelector('#panel-backup')?.insertAdjacentElement('beforebegin',panel) || teacher.append(panel);
     tab.onclick=()=>{teacher.querySelectorAll('.tab').forEach(x=>{x.classList.toggle('active',x===tab);x.setAttribute('aria-pressed',x===tab);});teacher.querySelectorAll('.panel').forEach(x=>x.classList.toggle('active',x===panel));refreshClassOptions();load();};
     document.querySelector('#growth-class').onchange=()=>{refreshStudentOptions();load();};
-    for(const id of ['#growth-student','#growth-language','#growth-duration','#growth-threshold','#growth-from','#growth-to'])document.querySelector(id).onchange=load;
+    for(const id of ['#growth-student','#growth-language','#growth-duration','#growth-source','#growth-threshold','#growth-from','#growth-to'])document.querySelector(id).onchange=load;
     document.querySelector('#growth-refresh').onclick=load;
     refreshClassOptions();
     if(typeof protectTeacherActions==='function')protectTeacherActions();
