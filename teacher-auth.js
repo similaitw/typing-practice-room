@@ -99,10 +99,13 @@ document.addEventListener('visibilitychange',() => {
   if (!document.hidden && document.querySelector('#teacher').classList.contains('active')) openTeacher();
 });
 
-// Cloud roster is kept in a separate classic script so the current app.js can stay stable.
-// It runs after app.js/teacher-auth.js and reuses the existing teacher UI as an offline cache/fallback.
-const cloudStudentsScript = document.createElement('script');
-cloudStudentsScript.src = 'cloud-students.js';
-cloudStudentsScript.async = false;
-cloudStudentsScript.onerror = () => console.warn('cloud-students.js could not be loaded; local roster remains available.');
-document.body.append(cloudStudentsScript);
+// app.js is parsed after this file. Wait for the page load event so its global roster helpers exist.
+window.addEventListener('load', () => {
+  if (document.querySelector('script[data-cloud-students]')) return;
+  const cloudStudentsScript = document.createElement('script');
+  cloudStudentsScript.src = 'cloud-students.js';
+  cloudStudentsScript.dataset.cloudStudents = 'true';
+  cloudStudentsScript.async = false;
+  cloudStudentsScript.onerror = () => console.warn('cloud-students.js could not be loaded; local roster remains available.');
+  document.body.append(cloudStudentsScript);
+});
