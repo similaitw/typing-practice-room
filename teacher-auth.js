@@ -101,13 +101,26 @@ document.addEventListener('visibilitychange',() => {
 
 // app.js is parsed after this file. Load optional cloud modules only after its global helpers exist.
 window.addEventListener('load', () => {
+  const loadMistakes = () => {
+    if (document.querySelector('script[data-mistake-analytics]')) return;
+    const script = document.createElement('script');
+    script.src = 'mistake-analytics.js';
+    script.dataset.mistakeAnalytics = 'true';
+    script.async = false;
+    script.onerror = () => console.warn('mistake-analytics.js could not be loaded; typing and assignments remain available.');
+    document.body.append(script);
+  };
   const loadDashboard = () => {
-    if (document.querySelector('script[data-assignment-dashboard]')) return;
+    if (document.querySelector('script[data-assignment-dashboard]')) return loadMistakes();
     const script = document.createElement('script');
     script.src = 'assignment-dashboard.js';
     script.dataset.assignmentDashboard = 'true';
     script.async = false;
-    script.onerror = () => console.warn('assignment-dashboard.js could not be loaded; assignment management remains available.');
+    script.onload = loadMistakes;
+    script.onerror = () => {
+      console.warn('assignment-dashboard.js could not be loaded; assignment management remains available.');
+      loadMistakes();
+    };
     document.body.append(script);
   };
   const loadAssignments = () => {
