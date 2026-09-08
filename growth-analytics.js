@@ -16,8 +16,12 @@
 
   async function requestGrowth(){
     const params=new URLSearchParams();
-    const pairs=[['class','#growth-class'],['studentId','#growth-student'],['language','#growth-language'],['duration','#growth-duration'],['threshold','#growth-threshold'],['from','#growth-from'],['to','#growth-to']];
-    for(const [name,selector] of pairs){const value=document.querySelector(selector)?.value;if(value)params.set(name,value);}
+    for(const [name,selector] of [['class','#growth-class'],['studentId','#growth-student'],['language','#growth-language'],['duration','#growth-duration'],['threshold','#growth-threshold']]){
+      const value=document.querySelector(selector)?.value;if(value)params.set(name,value);
+    }
+    const from=document.querySelector('#growth-from')?.value,to=document.querySelector('#growth-to')?.value;
+    if(from)params.set('from',new Date(`${from}T00:00:00`).toISOString());
+    if(to)params.set('to',new Date(`${to}T23:59:59.999`).toISOString());
     const response=await fetch(`/api/growth-analytics?${params}`,{credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(15000)});
     const result=await response.json().catch(()=>null);
     if(response.status===401){showTeacherLogin('教師登入已失效，請重新登入。');throw Error('教師登入已失效。');}
@@ -55,7 +59,7 @@
       ['平均正確率',s.averageAccuracy===null?'—':`${s.averageAccuracy}%`]
     ].map(([label,value])=>`<div><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join('');
     const tbody=result.students.map(row=>`<tr><td>${escapeHtml(row.className||'')}</td><td>${escapeHtml(row.seat||'')}</td><td>${escapeHtml(row.name)}</td><td>${row.tests}</td><td>${fmt(row.firstSpeed)}</td><td>${fmt(row.recentSpeed)}</td><td class="${changeClass(row.improvement)}">${signed(row.improvement)}</td><td class="${changeClass(row.improvementPercent)}">${row.improvementPercent===null?'—':signed(row.improvementPercent)+'%'}</td><td>${fmt(row.bestSpeed)}</td><td>${row.averageAccuracy===null?'—':row.averageAccuracy+'%'}</td></tr>`).join('');
-    document.querySelector('#growth-detail').innerHTML=result.students.length?`<div class="growth-table-wrap"><table class="growth-table"><thead><tr><th>班級</th><th>座號</th><th>姓名</th><th>有效測驗</th><th>首次 ${unit}</th><th>最近 ${unit}</th><th>變化</th><th>成長率</th><th>最佳</th><th>平均正確率</th></tr></thead><tbody>${tbody}</tbody></table></div><p class="growth-note">首次與最近都只在目前相同語言、秒數、正確率門檻與日期範圍內比較；只有 1 筆有效紀錄時不計成長率。</p>`:'<div class="empty">目前篩選範圍沒有學生。</div>';
+    document.querySelector('#growth-detail').innerHTML=result.students.length?`<div class="growth-table-wrap"><table class="growth-table"><thead><tr><th>班級</th><th>座號</th><th>姓名</th><th>有效測驗</th><th>首次 ${unit}</th><th>最近 ${unit}</th><th>變化</th><th>成長率</th><th>最佳</th><th>平均正確率</th></tr></thead><tbody>${tbody}</tbody></table></div><p class="growth-note">首次與最近都只在目前相同語言、秒數、正確率門檻與日期範圍內比較；只有 1 筆有效紀錄時不計成長率。班級平均與中位數以每位學生的最近值計算，不會讓練習次數多的學生被重複加權。</p>`:'<div class="empty">目前篩選範圍沒有學生。</div>';
     document.querySelector('#growth-status').textContent=`更新：${new Date(result.generatedAt).toLocaleTimeString('zh-TW')}`;
   }
 
