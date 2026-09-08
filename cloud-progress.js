@@ -66,7 +66,7 @@
     finally {data.lessonProgress = studentProgress || legacyProgress || visibleProgress;}
   };
 
-  async function request(body) {
+  async function request(body,expectedStudentId) {
     const response = await fetch('/api/progress',{
       method:body ? 'POST' : 'GET',credentials:'same-origin',cache:'no-store',
       headers:body ? {'Content-Type':'application/json'} : {},
@@ -74,6 +74,7 @@
     });
     const result = await response.json().catch(()=>null);
     if (!response.ok || !result) throw Object.assign(Error(result?.error || '目前無法同步課程進度。'),{status:response.status});
+    if (expectedStudentId && result.student?.id !== expectedStudentId) throw Object.assign(Error('學生登入已切換，已停止這次進度同步。'),{status:409});
     return result;
   }
 
@@ -95,26 +96,30 @@
     if (!studentSession) {setStatus('課程進度：目前使用這台瀏覽器的舊版／離線進度。'); return;}
     if (syncing) return;
     syncing = true;
-    const studentId = studentSession.student.id;
-    const local = cache[studentId] ||= {};
+    const expectedStudentId = studentSession.student.id;
+    const local = cache[expectedStudentId] ||= {};
     setStatus('課程進度：正在與雲端同步…');
     try {
       const localIds = Object.keys(local).filter(id => local[id] && validLessons.has(id));
-      if (localIds.length) await request({action:'merge',lessonIds:localIds});
-      const cloud = await request();
+      if (localIds.length) await request({action:'merge',studentId:expectedStudentId,lessonIds:localIds},expectedStudentId);
+      const cloud = await request(null,expectedStudentId);
+      if (studentSession?.student?.id !== expectedStudentId) return;
       for (const row of cloud.progress || []) if (validLessons.has(row.lessonId)) local[row.lessonId] = true;
-      cache[studentId] = cleanProgress(local);
+      cache[expectedStudentId] = cleanProgress(local);
       saveCache();
       showCurrentProgress();
       const legacyNote = Object.keys(cleanProgress(legacyProgress)).length ? '；這台電腦的舊版共用進度仍保留，但未自動認領' : '';
-      setStatus(`課程進度：已同步（${summary(cache[studentId])}）${legacyNote}。`);
+      setStatus(`課程進度：已同步（${summary(cache[expectedStudentId])}）${legacyNote}。`);
     } catch(error) {
       if (error.status === 401) {
         studentSession = null;
         showCurrentProgress();
         setStatus('課程進度：學生登入已失效，目前顯示這台瀏覽器的離線進度。');
-      } else setStatus(`課程進度：雲端同步失敗，先使用本機快取。${error.message}`);
-    } finally {syncing = false;}
+      } else if (error.status !== 409) setStatus(`課程進度：雲端同步失敗，先使用本機快取。${error.message}`);
+    } finally {
+      syncing = false;
+      if (studentSession?.authenticated && studentSession.student.id !== expectedStudentId) setTimeout(detectSession,0);
+    }
   }
 
   async function detectSession() {
@@ -130,6 +135,7 @@
     if (!studentSession?.authenticated || !practice?.done) return;
     const lesson = LESSONS.find(item => item.id === lessonId);
     if (!lesson) return;
+    const expectedStudentId = studentSession.student.id;
     const local = activeStudentProgress();
     local[lesson.id] = true;
     saveCache();
@@ -138,9 +144,11 @@
     const accuracy = Math.max(90,Math.min(100,Number(status.match(/正確率\s+(\d+)%/)?.[1] || 90)));
     setStatus('課程進度：本課已完成，正在同步…');
     try {
-      await request({action:'complete',lessonId:lesson.id,accuracy,speed});
-      setStatus(`課程進度：本課已同步（${summary(local)}）。`);
-    } catch(error) {setStatus(`課程進度：本課已保存在這台電腦，雲端稍後再同步。${error.message}`);}
+      await request({action:'complete',studentId:expectedStudentId,lessonId:lesson.id,accuracy,speed},expectedStudentId);
+      if (studentSession?.student?.id === expectedStudentId) setStatus(`課程進度：本課已同步（${summary(local)}）。`);
+    } catch(error) {
+      if (error.status !== 409 && studentSession?.student?.id === expectedStudentId) setStatus(`課程進度：本課已保存在這台電腦，雲端稍後再同步。${error.message}`);
+    }
   }
 
   window.typingCloudProgress = {
