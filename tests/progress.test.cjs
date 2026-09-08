@@ -54,11 +54,20 @@ function loadPrivateHandler() {
   return {handler:context.module.exports,sqlCalls};
 }
 
-test('completion writes to session student even when body tries another student id',async()=>{
+test('progress api rejects a write whose expected student id does not match the session',async()=>{
   const {handler,sqlCalls}=loadPrivateHandler();
   const res=response();
   await handler({method:'POST',headers:{host:'typing.example',cookie:'student-cookie'},body:{action:'complete',lessonId:'home',accuracy:96,speed:30,studentId:'student-b'}},res);
+  assert.equal(res.code,403);
+  assert.equal(sqlCalls.length,0);
+});
+
+test('completion writes only to the current session student',async()=>{
+  const {handler,sqlCalls}=loadPrivateHandler();
+  const res=response();
+  await handler({method:'POST',headers:{host:'typing.example',cookie:'student-cookie'},body:{action:'complete',lessonId:'home',accuracy:96,speed:30,studentId:'student-a'}},res);
   assert.equal(res.code,200);
+  assert.equal(res.body.student.id,'student-a');
   assert.equal(res.body.progress.lessonId,'home');
   const allValues=sqlCalls.flatMap(call=>call.values);
   assert.ok(allValues.includes('student-a'));
