@@ -19,7 +19,7 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Node tests
-        run: node --test tests/core.test.cjs tests/teacher-auth.test.cjs tests/records-auth.test.cjs tests/students-api.test.cjs tests/assignments.test.cjs tests/assignment-dashboard.test.cjs tests/mistake-analysis.test.cjs tests/weak-key-practice.test.cjs tests/progress.test.cjs tests/growth-analytics.test.cjs
+        run: node --test tests/core.test.cjs tests/teacher-auth.test.cjs tests/records-auth.test.cjs tests/students-api.test.cjs tests/assignments.test.cjs tests/assignment-dashboard.test.cjs tests/mistake-analysis.test.cjs tests/weak-key-practice.test.cjs tests/progress.test.cjs tests/growth-analytics.test.cjs tests/report.test.cjs
       - name: Syntax checks
         run: |
           node --check app.js
@@ -34,6 +34,7 @@ jobs:
           node --check weak-key-practice.js
           node --check cloud-progress.js
           node --check growth-analytics.js
+          node --check report.js
           node --check api/records.js
           node --check api/students.js
           node --check api/assignments.js
@@ -42,9 +43,11 @@ jobs:
           node --check api/mistake-analytics.js
           node --check api/progress.js
           node --check api/growth-analytics.js
+          node --check api/report.js
           node --check lib/typing-schema.js
           node --check lib/student-session.js
           node --check lib/mistake-analysis.js
           node --check lib/lesson-catalog.js
           node --check lib/progress-schema.js
           node --check lib/growth-analysis.js
+          node --check lib/report-analysis.js
