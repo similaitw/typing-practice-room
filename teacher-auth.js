@@ -101,13 +101,26 @@ document.addEventListener('visibilitychange',() => {
 
 // app.js is parsed after this file. Load optional cloud modules only after its global helpers exist.
 window.addEventListener('load', () => {
+  const loadMyRecords = () => {
+    if (document.querySelector('script[data-my-records]')) return;
+    const script = document.createElement('script');
+    script.src = 'my-records.js';
+    script.dataset.myRecords = 'true';
+    script.async = false;
+    script.onerror = () => console.warn('my-records.js could not be loaded; existing student and teacher tools remain available.');
+    document.body.append(script);
+  };
   const loadReport = () => {
-    if (document.querySelector('script[data-teacher-report]')) return;
+    if (document.querySelector('script[data-teacher-report]')) return loadMyRecords();
     const script = document.createElement('script');
     script.src = 'report.js';
     script.dataset.teacherReport = 'true';
     script.async = false;
-    script.onerror = () => console.warn('report.js could not be loaded; growth analytics and existing teacher tools remain available.');
+    script.onload = loadMyRecords;
+    script.onerror = () => {
+      console.warn('report.js could not be loaded; growth analytics and existing teacher tools remain available.');
+      loadMyRecords();
+    };
     document.body.append(script);
   };
   const loadGrowth = () => {
