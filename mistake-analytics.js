@@ -6,7 +6,6 @@
   const input = document.querySelector('#test-input');
   if (!input) return;
   let roundMistakes = new Map();
-  let lastRoundStarted = false;
 
   const css = document.createElement('style');
   css.textContent = `
@@ -21,6 +20,7 @@
 
   const visibleKey = key => key === ' ' ? 'Space' : key;
   const pairKey = (expected,actual) => `${expected}\u0000${actual}`;
+  const fingerName = key => fingerFor(typeof shiftedKeys !== 'undefined' && shiftedKeys[key] ? shiftedKeys[key] : key);
   const snapshotMistakes = () => [...roundMistakes.entries()]
     .map(([key,count]) => {const [expected,actual]=key.split('\u0000'); return [expected,actual,count];})
     .sort((a,b) => b[2]-a[2] || a[0].localeCompare(b[0]) || a[1].localeCompare(b[1])).slice(0,100);
@@ -28,10 +28,7 @@
   input.addEventListener('keydown', event => {
     if (document.activeElement !== input || test?.language !== 'en' || test?.finished || test?.composing) return;
     if (event.ctrlKey || event.metaKey || event.altKey || Array.from(event.key || '').length !== 1) return;
-    if (!test.started && input.value === '') {
-      roundMistakes = new Map();
-      lastRoundStarted = true;
-    }
+    if (!test.started && input.value === '') roundMistakes = new Map();
     const start = input.selectionStart ?? input.value.length;
     const end = input.selectionEnd ?? start;
     if (start !== end) return;
@@ -47,7 +44,7 @@
     const fingers = new Map();
     let total = 0;
     for (const [expected,,count] of mistakes || []) {
-      const finger = fingerFor(expected);
+      const finger = fingerName(expected);
       fingers.set(finger,(fingers.get(finger)||0)+count);
       total += count;
     }
@@ -75,9 +72,9 @@
   publishRecord = function mistakePublishRecord(record) {
     const mistakes = record.language === 'en' ? snapshotMistakes() : [];
     record.mistakes = mistakes;
+    if (typeof save === 'function') save();
     const result = previousPublishRecord(record);
     setTimeout(() => renderStudentDiagnostic(mistakes), 0);
-    lastRoundStarted = false;
     return result;
   };
 
