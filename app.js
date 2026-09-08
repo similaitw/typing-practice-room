@@ -144,7 +144,7 @@ function stats() {
 function paintText(target, value, element) {
   const typed = C.chars(value);
   element.innerHTML = C.chars(target).map((c,i) => `<span class="char ${i < typed.length ? typed[i] === c ? 'correct' : 'wrong' : ''} ${i === typed.length ? 'current' : ''}">${escapeHtml(c)}</span>`).join('');
-  if (element.id === 'test-prompt') {
+  if (element.id === 'test-prompt' || element.id === 'practice-text') {
     const current = element.querySelector('.current');
     if (current) {
       const box = element.getBoundingClientRect(), cursor = current.getBoundingClientRect();
@@ -187,8 +187,17 @@ function renderLessons() {
 }
 function renderLessonDetail() {
   const l = LESSONS.find(l => l.id === lessonId) || LESSONS[0];
+  const count = data.settings.lessonLength || 200;
+  const targetText = l.group === 'en' ? (l.text.trim() + ' ').repeat(Math.ceil(count / (l.text.trim().length + 1))).slice(0, count).replace(/ $/, l.text.trim()[0]) : l.text;
   practice = {start:0, composing:false, done:false, committed:''};
-  $('#lesson-detail').innerHTML = `<div class="lesson-detail"><div class="lesson-head"><div><p class="eyebrow">LESSON ${String(LESSONS.indexOf(l) + 1).padStart(2,'0')}</p><h2 id="lesson-title" tabindex="-1">${l.title} <span>${l.sub}</span></h2><p>${l.desc}</p></div><span>${data.lessonProgress[l.id] ? '✓ 已完成' : ''}</span></div><p class="goal">本課目標：${l.goal}。完整輸入且正確率至少 90% 即可完成。</p><p>${l.rawKeys ? '請切換英文輸入。本課會把標準注音實體按鍵轉成注音符號，不必用輸入法單獨選出符號。' : l.group === 'zh' ? '請切換自己的中文輸入法；選字確認後才計入輸入。' : '請切換英文輸入並關閉 Caps Lock。大寫字母使用另一手的小指按住 Shift。'}</p>${l.id === 'symbols' ? shiftReferenceHTML() : ''}${keyboardHTML(l)}<p id="finger-hint" class="finger"></p><div class="practice"><div id="practice-text" class="practice-text"></div><label for="practice-input">照著上方文字輸入（空格與標點也要一致）</label><textarea id="practice-input" class="practice-input" rows="3" autocomplete="off" autocapitalize="off" spellcheck="false"></textarea><div class="progress"><i id="lesson-progress-bar"></i></div><div class="practice-foot"><span id="practice-status"></span><div class="actions"><button id="practice-again" class="btn quiet">重新練習</button><button id="complete-lesson" class="btn primary" disabled>完成本課 →</button></div></div><p id="lesson-message" role="status"></p></div></div>`;
+  $('#lesson-detail').innerHTML = `<div class="lesson-detail"><div class="lesson-head"><div><p class="eyebrow">LESSON ${String(LESSONS.indexOf(l) + 1).padStart(2,'0')}</p><h2 id="lesson-title" tabindex="-1">${l.title} <span>${l.sub}</span></h2><p>${l.desc}</p></div><span>${data.lessonProgress[l.id] ? '✓ 已完成' : ''}</span></div><p class="goal">本課目標：${l.goal}。完整輸入且正確率至少 90% 即可完成。</p><p>${l.rawKeys ? '請切換英文輸入。本課會把標準注音實體按鍵轉成注音符號，不必用輸入法單獨選出符號。' : l.group === 'zh' ? '請切換自己的中文輸入法；選字確認後才計入輸入。' : '請切換英文輸入並關閉 Caps Lock。大寫字母使用另一手的小指按住 Shift。'}</p>${l.id === 'symbols' ? shiftReferenceHTML() : ''}${l.group === 'en' ? `<form id="lesson-length-form" class="lesson-length"><div><label for="lesson-length">練習字數</label><p id="lesson-length-help">50–2,000 字元，含空格與標點。套用後重新開始本課。</p></div><div class="actions"><input id="lesson-length" type="number" min="50" max="2000" step="1" required value="${count}" list="lesson-length-options" aria-describedby="lesson-length-help"><datalist id="lesson-length-options"><option value="100"></option><option value="200"></option><option value="500"></option><option value="1000"></option><option value="2000"></option></datalist><button type="submit" class="btn outline">套用字數</button></div></form>` : ''}${keyboardHTML(l)}<p id="finger-hint" class="finger"></p><div class="practice"><div id="practice-text" class="practice-text"></div><label for="practice-input">照著上方文字輸入（空格與標點也要一致）</label><textarea id="practice-input" class="practice-input" rows="3" autocomplete="off" autocapitalize="off" spellcheck="false"></textarea><div class="progress"><i id="lesson-progress-bar"></i></div><div class="practice-foot"><span id="practice-status"></span><div class="actions"><button id="practice-again" class="btn quiet">重新練習</button><button id="complete-lesson" class="btn primary" disabled>完成本課 →</button></div></div><p id="lesson-message" role="status"></p></div></div>`;
+  if (l.group === 'en') $('#lesson-length-form').onsubmit = e => {
+    e.preventDefault();
+    const lengthInput = $('#lesson-length');
+    if (!lengthInput.reportValidity()) return;
+    data.settings.lessonLength = Number(lengthInput.value); save();
+    renderLessonDetail(); $('#practice-input').focus();
+  };
   const input = $('#practice-input');
   const paint = () => {
     if (practice.composing || practice.done) return;
@@ -199,18 +208,18 @@ function renderLessonDetail() {
     }
     if (input.value && !practice.start) practice.start = performance.now();
     practice.committed = input.value;
-    const m = C.measure(input.value, l.text, practice.start ? (performance.now() - practice.start) / 1000 : 0, l.group);
-    paintText(l.text, input.value, $('#practice-text'));
-    $('#practice-status').textContent = `${m.speed} ${l.group === 'en' ? 'WPM' : 'CPM'} · 正確率 ${m.accuracy}% · ${m.progress}% · 錯字 ${m.errors}`;
+    const m = C.measure(input.value, targetText, practice.start ? (performance.now() - practice.start) / 1000 : 0, l.group);
+    paintText(targetText, input.value, $('#practice-text'));
+    $('#practice-status').textContent = `${m.speed} ${l.group === 'en' ? 'WPM' : 'CPM'} · 正確率 ${m.accuracy}% · ${m.progress}% · 錯字 ${m.errors} · ${m.typed} / ${C.chars(targetText).length} 字元`;
     $('#lesson-progress-bar').style.width = m.progress + '%';
-    const next = C.chars(l.text)[m.typed];
+    const next = C.chars(targetText)[m.typed];
     const physical = l.rawKeys ? Object.keys(bopomofo).find(k => bopomofo[k] === next) || next : shiftedKeys[next] || next;
     const needsShift = l.group === 'en' && (Object.hasOwn(shiftedKeys,next) || /^[A-Z]$/.test(next || ''));
     const shiftSide = physical && fingerFor(physical).startsWith('左') ? 'Right' : 'Left';
     $$('.keyboard-key').forEach(k => k.classList.toggle('key-current', !!physical && (k.dataset.key === physical.toLowerCase() || needsShift && k.dataset.key === 'Shift' + shiftSide)));
     const fingerText = physical ? fingerFor(physical) : l.fingers;
     $('#finger-hint').textContent = next ? `下一字：${next === ' ' ? '空格' : next} ｜ ${fingerText}${physical && (l.rawKeys || needsShift) ? ' ｜ 按鍵 ' + physical.toUpperCase() : ''}${needsShift ? ` ＋ ${shiftSide === 'Right' ? '右' : '左'}手小指按住 ${shiftSide === 'Right' ? '右' : '左'} Shift` : ''}` : '已輸入到最後，檢查錯字後完成本課。';
-    $('#complete-lesson').disabled = m.typed !== C.chars(l.text).length || m.accuracy < 90;
+    $('#complete-lesson').disabled = m.typed !== C.chars(targetText).length || m.accuracy < 90;
   };
   input.addEventListener('compositionstart', () => {practice.composing = true;});
   input.addEventListener('compositionend', () => {practice.composing = false; paint();});
@@ -224,8 +233,8 @@ function renderLessonDetail() {
       if (next) {lessonId = next.id; renderLessons(); $('#lesson-title').focus();} else show('test');
       return;
     }
-    const m = C.measure(input.value,l.text,1,l.group);
-    if (m.typed !== C.chars(l.text).length || m.accuracy < 90) return;
+    const m = C.measure(input.value,targetText,1,l.group);
+    if (m.typed !== C.chars(targetText).length || m.accuracy < 90) return;
     practice.done = true; input.disabled = true;
     data.lessonProgress[l.id] = true; save();
     $(`[data-lesson="${l.id}"]`).setAttribute('aria-label', `${l.title}，已完成`);

@@ -112,6 +112,7 @@ const TypingCore = (() => {
       if (/^[a-z0-9-]{1,40}$/.test(key) && value === true) result.lessonProgress[key] = true;
     }
     if (number(p.settings?.threshold,100)) result.settings.threshold = p.settings.threshold;
+    if (Number.isInteger(p.settings?.lessonLength) && p.settings.lessonLength >= 50 && p.settings.lessonLength <= 2000) result.settings.lessonLength = p.settings.lessonLength;
     return result;
   }
   return {emptyData, chars, measure, languageOf, compareScores, rank, parseCSV, rosterCSV, csvCell, validateData};
