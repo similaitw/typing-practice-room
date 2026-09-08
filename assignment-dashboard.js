@@ -161,12 +161,15 @@
       button.onclick=()=>loadDashboard(id,'',true);
       actions.prepend(button);
     });
+    if (typeof protectTeacherActions === 'function') protectTeacherActions();
   }
 
   const observer=new MutationObserver(enhanceAssignmentRows);
   function start() {
-    ensureDashboardUI();ensureProjectionUI();enhanceAssignmentRows();
-    const list=document.querySelector('#teacher-assignment-list');if(list)observer.observe(list,{childList:true,subtree:true});
+    ensureProjectionUI();
+    const teacher=document.querySelector('#teacher');
+    if(teacher) observer.observe(teacher,{childList:true,subtree:true});
+    enhanceAssignmentRows();
   }
   start();
 })();
