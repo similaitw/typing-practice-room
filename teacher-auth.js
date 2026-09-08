@@ -99,13 +99,26 @@ document.addEventListener('visibilitychange',() => {
   if (!document.hidden && document.querySelector('#teacher').classList.contains('active')) openTeacher();
 });
 
-// app.js is parsed after this file. Wait for the page load event so its global roster helpers exist.
+// app.js is parsed after this file. Load optional cloud modules only after its global helpers exist.
 window.addEventListener('load', () => {
-  if (document.querySelector('script[data-cloud-students]')) return;
+  const loadAssignments = () => {
+    if (document.querySelector('script[data-assignments]')) return;
+    const script = document.createElement('script');
+    script.src = 'assignments.js';
+    script.dataset.assignments = 'true';
+    script.async = false;
+    script.onerror = () => console.warn('assignments.js could not be loaded; base typing practice remains available.');
+    document.body.append(script);
+  };
+  if (document.querySelector('script[data-cloud-students]')) return loadAssignments();
   const cloudStudentsScript = document.createElement('script');
   cloudStudentsScript.src = 'cloud-students.js';
   cloudStudentsScript.dataset.cloudStudents = 'true';
   cloudStudentsScript.async = false;
-  cloudStudentsScript.onerror = () => console.warn('cloud-students.js could not be loaded; local roster remains available.');
+  cloudStudentsScript.onload = loadAssignments;
+  cloudStudentsScript.onerror = () => {
+    console.warn('cloud-students.js could not be loaded; local roster remains available.');
+    loadAssignments();
+  };
   document.body.append(cloudStudentsScript);
 });
