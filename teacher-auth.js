@@ -101,13 +101,26 @@ document.addEventListener('visibilitychange',() => {
 
 // app.js is parsed after this file. Load optional cloud modules only after its global helpers exist.
 window.addEventListener('load', () => {
+  const loadReport = () => {
+    if (document.querySelector('script[data-teacher-report]')) return;
+    const script = document.createElement('script');
+    script.src = 'report.js';
+    script.dataset.teacherReport = 'true';
+    script.async = false;
+    script.onerror = () => console.warn('report.js could not be loaded; growth analytics and existing teacher tools remain available.');
+    document.body.append(script);
+  };
   const loadGrowth = () => {
-    if (document.querySelector('script[data-growth-analytics]')) return;
+    if (document.querySelector('script[data-growth-analytics]')) return loadReport();
     const script = document.createElement('script');
     script.src = 'growth-analytics.js';
     script.dataset.growthAnalytics = 'true';
     script.async = false;
-    script.onerror = () => console.warn('growth-analytics.js could not be loaded; existing teacher tools remain available.');
+    script.onload = loadReport;
+    script.onerror = () => {
+      console.warn('growth-analytics.js could not be loaded; existing teacher tools remain available.');
+      loadReport();
+    };
     document.body.append(script);
   };
   const loadWeakPractice = () => {
