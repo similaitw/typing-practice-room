@@ -16,9 +16,12 @@ create table if not exists public.typing_records (
   errors integer not null check (errors >= 0),
   typed_length integer not null check (typed_length > 0),
   target_length integer not null check (target_length > 0),
+  assignment_id text,
+  mistakes jsonb,
   created_at timestamptz not null
 );
 
 create index if not exists typing_records_created_at_idx on public.typing_records (created_at desc);
 create index if not exists typing_records_student_id_idx on public.typing_records (student_id);
 create index if not exists typing_records_language_duration_idx on public.typing_records (language, duration);
+create index if not exists typing_records_assignment_student_idx on public.typing_records (assignment_id, student_id, created_at desc);
