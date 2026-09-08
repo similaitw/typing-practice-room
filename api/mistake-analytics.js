@@ -5,7 +5,7 @@ const {neon} = require('@neondatabase/serverless');
 const {readCredentials} = require('../lib/teacher-credentials');
 const {ensureAssignmentSchema} = require('../lib/typing-schema');
 const {aggregateMistakes} = require('../lib/mistake-analysis');
-const {readStudentSession} = require('../lib/student-session');
+const {readStudentSession, cookieValue, STUDENT_COOKIE} = require('../lib/student-session');
 
 const COOKIE = '__Host-typing-teacher';
 const TTL = 4 * 60 * 60;
@@ -44,17 +44,9 @@ module.exports = async function handler(req,res) {
 
   const query = new URL(req.url,`https://${req.headers.host}`).searchParams;
   const mine = query.get('view') === 'mine';
-  const sql = neon(settings.databaseUrl);
-  try {await ensureAssignmentSchema(sql);} catch {return res.status(502).json({error:'錯鍵資料欄位目前無法初始化。'});}
-
   let className = null, studentId = null, assignmentId = null, from = null, to = null, student = null;
-  if (mine) {
-    let session;
-    try {session = await readStudentSession(sql,req.headers.cookie);} catch {return res.status(502).json({error:'目前無法確認學生登入狀態。'});}
-    if (!session) return res.status(401).json({error:'請先使用老師提供的學生啟用碼登入。'});
-    studentId = session.studentId;
-    student = session.student;
-  } else {
+
+  if (!mine) {
     if (!settings.password?.length || !settings.secret?.length) return res.status(503).json({error:'目前無法讀取教師登入設定。'});
     let credentials;
     try {credentials = await readCredentials();} catch {return res.status(503).json({error:'目前無法讀取教師登入設定。'});}
@@ -66,6 +58,19 @@ module.exports = async function handler(req,res) {
     to = safeDate(query.get('to'));
     if ([className,studentId,assignmentId,from,to].some(value => value === undefined)) return res.status(400).json({error:'查詢條件格式不正確。'});
     if (from && to && Date.parse(from) > Date.parse(to)) return res.status(400).json({error:'開始日期不能晚於結束日期。'});
+  } else if (!cookieValue(req.headers.cookie,STUDENT_COOKIE)) {
+    return res.status(401).json({error:'請先使用老師提供的學生啟用碼登入。'});
+  }
+
+  const sql = neon(settings.databaseUrl);
+  try {await ensureAssignmentSchema(sql);} catch {return res.status(502).json({error:'錯鍵資料欄位目前無法初始化。'});}
+
+  if (mine) {
+    let session;
+    try {session = await readStudentSession(sql,req.headers.cookie);} catch {return res.status(502).json({error:'目前無法確認學生登入狀態。'});}
+    if (!session) return res.status(401).json({error:'請先使用老師提供的學生啟用碼登入。'});
+    studentId = session.studentId;
+    student = session.student;
   }
 
   try {
