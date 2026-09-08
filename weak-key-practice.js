@@ -1,6 +1,17 @@
 'use strict';
 
 (() => {
+  const loadCloudProgress = () => {
+    if (document.querySelector('script[data-cloud-progress]')) return;
+    const script = document.createElement('script');
+    script.src = 'cloud-progress.js';
+    script.dataset.cloudProgress = 'true';
+    script.async = false;
+    script.onerror = () => console.warn('cloud-progress.js could not be loaded; local lesson progress remains available.');
+    document.body.append(script);
+  };
+  loadCloudProgress();
+
   if (typeof WeakKeyCore === 'undefined' || typeof show !== 'function' || typeof escapeHtml !== 'function') return;
 
   let weakKeys = [];
