@@ -155,13 +155,13 @@
   window.addEventListener('online',() => studentSession?.authenticated && syncProgress(studentSession));
   window.addEventListener('typing:student-session',event => syncProgress(event.detail));
 
-  const tasks = document.querySelector('#my-tasks');
-  if (tasks) {
+  const sessionCopy = document.querySelector('#student-session-copy');
+  if (sessionCopy) {
     const observer = new MutationObserver(() => {
       clearTimeout(detectTimer);
       detectTimer = setTimeout(detectSession,250);
     });
-    observer.observe(tasks,{subtree:true,childList:true,characterData:true,attributes:true});
+    observer.observe(sessionCopy,{subtree:true,childList:true,characterData:true});
   }
 
   detectSession();
