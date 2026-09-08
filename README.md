@@ -17,6 +17,8 @@
 - 「我的弱鍵」只讀取目前學生自己的錯鍵資料，顯示前 4 個弱鍵與錯按次數。
 - 1／2 分鐘弱鍵特訓由本機規則與單字庫生成，不使用 AI API。
 - 課程完成進度會依 student session 同步到雲端，換電腦可恢復；離線時仍保留每位學生自己的本機快取。
+- **Phase 9「我的紀錄」**：登入後查看自己的英文／中文、15／30／60／120 秒測速歷程，顯示首次、最近、最佳、平均正確率、進步幅度、成長率與最近 20 次 SVG 趨勢圖。
+- 「我的紀錄」預設只看標準題庫，可切全部練習；最低正確率可選全部／80／90／95%。英文另顯示弱鍵與「錯按事件／100 字元」前後半變化。
 
 ## 教師功能
 
@@ -31,7 +33,7 @@
 - **Phase 8「報表」**：整合作業完成度、成長與英文錯鍵，可依班級、學生、作業、語言、秒數、來源、正確率與日期篩選。
 - 報表可下載 UTF-8 BOM CSV，並使用瀏覽器列印成 A4 橫式／另存 PDF。
 
-## Phase 1–8 狀態
+## Phase 1–9 狀態
 
 - Phase 1：雲端學生名單 ✅
 - Phase 2：教師派測速作業／學生「我的任務」✅
@@ -41,7 +43,8 @@
 - Phase 6：學生課程進度雲端同步 ✅
 - Phase 7：教師成長分析 ✅
 - Phase 8：教師統一報表／CSV／列印 PDF ✅
-- 下一階段：Phase 9 徽章、班級挑戰與學習動機機制
+- Phase 9：學生「我的紀錄」／輕量趨勢圖 ✅
+- Phase 10／11：成就系統／班級挑戰目前依使用者決定暫緩。
 
 ## 學生操作
 
@@ -51,6 +54,7 @@
 4. 登入後可直接開始指定作業；共用電腦用完請按「結束使用」。
 5. 登入後課程頁會切換到該學生自己的課程完成進度並同步 Postgres。
 6. 英文測速完成後可看錯鍵診斷；首頁「我的弱鍵」可開始 1／2 分鐘補強。
+7. 首頁「我的紀錄」可切語言、秒數、來源與最低正確率，查看自己的最近 20 次趨勢與最近紀錄。
 
 ## 教師操作
 
@@ -63,6 +67,23 @@
 7. 到「成長分析」查看首次／最近／班級平均與中位數。
 8. 到「報表」選班級、學生、作業、語言、秒數、來源、最低正確率與日期範圍。
 9. 按「下載 CSV」匯出目前報表，或按「列印／儲存 PDF」開啟 A4 橫式列印頁。
+
+## Phase 9 我的紀錄規則
+
+`GET /api/my-records` 只接受目前有效 student session，不接受前端指定 `studentId`。因此學生即使自行修改 query string，也不能讀取其他學生的紀錄。
+
+可篩選：
+
+- 英文 WPM／中文 CPM。
+- 15／30／60／120 秒。
+- `builtin` 標準題庫／`all` 全部練習。
+- 最低正確率 0／80／90／95%。
+
+學生摘要顯示：測驗次數、第一次、最近一次、個人最佳、平均正確率、絕對進步與百分比成長。折線圖只畫目前條件最近 20 次紀錄，不引入大型 chart library，使用原生 SVG。
+
+英文模式另聚合目前條件的弱鍵。至少 4 筆紀錄時，系統將紀錄按時間分成前半／後半，使用「過程中錯按事件 ÷ 已輸入字元 × 100」比較錯按率。這包含已用 Backspace 修正的錯按，因此是鍵位操作診斷，不等同最終文字錯字率。
+
+「我的紀錄」預設最低正確率為 0%，讓學生看到完整學習歷程；若要只比較較穩定表現，可自行切 80／90／95%。預設來源仍是標準題庫，避免文章難度不同造成主趨勢失真。
 
 ## Phase 7 成長分析規則
 
@@ -78,29 +99,9 @@
 
 ## Phase 8 報表規則
 
-`GET /api/report` 為教師 session 專用統一報表 API。前端「報表」分頁可篩選：
+`GET /api/report` 為教師 session 專用統一報表 API。前端「報表」分頁可篩選班級、學生、作業、語言、時長、來源、最低正確率與日期。作業狀態依該作業自己的門檻判定；成長值則依報表篩選條件計算，兩者不混用。
 
-- 班級、單一學生。
-- 作業（可不指定）。
-- 英文／中文。
-- 15／30／60／120 秒。
-- 標準題庫／全部來源。
-- 最低正確率。
-- 起訖日期。
-
-報表每位學生可顯示：
-
-- 班級、座號、姓名。
-- 作業名稱、作業狀態、有效次數。
-- 作業最佳速度、作業最佳正確率。
-- 成長條件下的首次速度、最近速度、進步幅度、成長率。
-- 英文常錯鍵（最多前 3 個）。
-
-作業狀態依該作業自己的最低正確率／速度／完成次數／截止日判定；成長值則依報表上方的語言、秒數、來源、正確率與日期範圍計算，兩者不混用。
-
-選定作業時，常錯鍵只統計該作業的英文紀錄；未指定作業時，依目前英文、秒數、來源與日期範圍統計。錯鍵統計不保存完整輸入文章。
-
-CSV 使用現有 `TypingCore.csvCell`，保留公式注入防護並輸出 UTF-8 BOM。列印版只輸出報表標題、篩選條件與表格，不輸出教師登入控制、密碼欄位或操作介面；PDF 由瀏覽器「列印 → 儲存成 PDF」完成，不引入額外 PDF 套件。
+CSV 使用現有 `TypingCore.csvCell`，保留公式注入防護並輸出 UTF-8 BOM。列印版只輸出報表標題、篩選條件與表格，不輸出教師登入控制或密碼欄位；PDF 由瀏覽器「列印 → 儲存成 PDF」完成。
 
 ## 課程進度雲端同步
 
@@ -129,8 +130,9 @@ Phase 6 使用 `typing_progress`，以 `(student_id, lesson_id)` 為唯一鍵，
 - `typing_progress`：學生個人課程完成進度。
 - 教師登入：HttpOnly、Secure、SameSite=Strict cookie，最長 4 小時。
 - 學生登入：HttpOnly、Secure、SameSite=Strict cookie，最長 8 小時。
-- 完整紀錄、名單、作業、完成度、教師錯鍵分析、成長分析與報表均需要教師 session。
-- 學生私有作業、「我的弱鍵」與雲端課程進度需要 student session。
+- 完整教師資料、班級分析與報表需要教師 session。
+- 學生私有作業、「我的弱鍵」、雲端課程進度與「我的紀錄」需要 student session。
+- `/api/my-records` 由 server 直接使用 session student ID，不接受查詢其他學生 ID。
 
 本系統仍不是正式考試監考工具；速度與正確率主要由瀏覽器端既有計分邏輯計算。
 
@@ -149,6 +151,7 @@ Phase 6 使用 `typing_progress`，以 `(student_id, lesson_id)` 為唯一鍵，
 - `GET|POST /api/progress`：學生自己的課程進度。
 - `GET /api/growth-analytics`：教師成長分析。
 - `GET /api/report`：教師統一報表。
+- `GET /api/my-records`：目前 student session 的私人學習歷程與輕量趨勢資料。
 
 ## 本機執行
 
@@ -156,20 +159,13 @@ Phase 6 使用 `typing_progress`，以 `(student_id, lesson_id)` 為唯一鍵，
 python -m http.server 4173
 ```
 
-開啟 `http://localhost:4173`。學生自由練習可用純靜態頁面；教師登入、雲端名單、作業、學生 session、完成度、雲端分析、報表與跨裝置課程進度需要 Vercel Functions／Postgres。
+開啟 `http://localhost:4173`。學生自由練習可用純靜態頁面；教師登入、雲端名單、作業、學生 session、完成度、雲端分析、報表、私人學習歷程與跨裝置課程進度需要 Vercel Functions／Postgres。
 
 ## 部署
 
 GitHub：`https://github.com/similaitw/typing-practice-room`
 
 Vercel 專案：`typing-practice-room`
-
-```sh
-git add .
-git commit -m "Update typing practice room"
-git push origin main
-vercel --prod
-```
 
 環境變數：
 
@@ -183,13 +179,14 @@ vercel --prod
 
 GitHub Actions 在 `main` push 與 PR 執行完整 Node tests 與主要前後端 JavaScript `node --check`。
 
-Phase 8 新增測試：
+Phase 9 新增測試：
 
-- 作業 `completed / in_progress / not_started / overdue` 報表狀態。
-- 將成長、作業與每位學生常錯鍵合併到同一列。
-- 常錯鍵跨紀錄聚合與前 3 鍵摘要。
-- 報表篩選的班級、作業、語言、秒數、來源、正確率與日期驗證。
-- 真實教師登入 cookie 可授權；tampered cookie 被拒絕。
+- first／recent／best、絕對與百分比成長。
+- 趨勢只回傳最近 20 筆。
+- 英文錯按事件／100 字元與前後半減少比例。
+- `language`／`duration`／`source`／`threshold` 篩選。
+- query 即使帶 `studentId` 也不影響 server session 身分。
+- 缺少 student cookie 時在資料庫查詢前直接回 401。
 
 ## 主要檔案
 
@@ -201,14 +198,13 @@ Phase 8 新增測試：
 - `weak-key-core.js`／`weak-key-practice.js`：學生弱鍵補強
 - `cloud-progress.js`：學生課程進度同步
 - `growth-analytics.js`／`api/growth-analytics.js`：教師成長分析
-- `report.js`：教師報表 UI、CSV 與列印版
-- `api/report.js`：教師統一報表 API
-- `lib/report-analysis.js`：報表狀態、錯鍵與資料合併規則
+- `report.js`／`api/report.js`：教師統一報表、CSV 與列印版
+- `my-records.js`：學生「我的紀錄」、SVG 趨勢與弱鍵變化 UI
+- `api/my-records.js`：student-session 私有學習歷程 API
+- `lib/student-history.js`：學生 first／recent／best、趨勢與錯按率規則
 - `AGENT_HANDOFF.md`：目前可直接接手的功能基準
 - `typing-practice-room-codex-spec.md`：完整 Phase 1–11 Roadmap
 
 ## 後續開發
 
-下一階段優先：**Phase 9 徽章、班級挑戰與學習動機機制**。
-
-先以可解釋、非競爭傷害性的徽章與班級共同目標開始，例如：首次完成 90% 正確率、連續完成課程、弱鍵改善、全班作業完成率達 80%／100%；避免公開顯示落後學生姓名。
+原 Roadmap 的 Phase 10「正向成就系統」與 Phase 11「班級挑戰」目前依使用者決定暫緩。下一輪若不做遊戲化，優先處理既有技術待辦與 Production E2E，例如公開排行榜排除已停用學生、學生／教師完整真實流程驗證，以及必要的安全性與可維護性整理。
