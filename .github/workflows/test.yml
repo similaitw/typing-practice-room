@@ -1,0 +1,31 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Node tests
+        run: node --test tests/core.test.cjs tests/teacher-auth.test.cjs tests/records-auth.test.cjs tests/students-api.test.cjs
+      - name: Syntax checks
+        run: |
+          node --check app.js
+          node --check core.js
+          node --check data.js
+          node --check teacher-auth.js
+          node --check cloud-students.js
+          node --check api/records.js
+          node --check api/students.js
