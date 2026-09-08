@@ -101,13 +101,36 @@ document.addEventListener('visibilitychange',() => {
 
 // app.js is parsed after this file. Load optional cloud modules only after its global helpers exist.
 window.addEventListener('load', () => {
+  const loadWeakPractice = () => {
+    const loadUI = () => {
+      if (document.querySelector('script[data-weak-key-practice]')) return;
+      const script = document.createElement('script');
+      script.src = 'weak-key-practice.js';
+      script.dataset.weakKeyPractice = 'true';
+      script.async = false;
+      script.onerror = () => console.warn('weak-key-practice.js could not be loaded; mistake analytics remains available.');
+      document.body.append(script);
+    };
+    if (typeof WeakKeyCore !== 'undefined' || document.querySelector('script[data-weak-key-core]')) return loadUI();
+    const core = document.createElement('script');
+    core.src = 'weak-key-core.js';
+    core.dataset.weakKeyCore = 'true';
+    core.async = false;
+    core.onload = loadUI;
+    core.onerror = () => console.warn('weak-key-core.js could not be loaded; weak-key practice is unavailable.');
+    document.body.append(core);
+  };
   const loadMistakes = () => {
-    if (document.querySelector('script[data-mistake-analytics]')) return;
+    if (document.querySelector('script[data-mistake-analytics]')) return loadWeakPractice();
     const script = document.createElement('script');
     script.src = 'mistake-analytics.js';
     script.dataset.mistakeAnalytics = 'true';
     script.async = false;
-    script.onerror = () => console.warn('mistake-analytics.js could not be loaded; typing and assignments remain available.');
+    script.onload = loadWeakPractice;
+    script.onerror = () => {
+      console.warn('mistake-analytics.js could not be loaded; typing and assignments remain available.');
+      loadWeakPractice();
+    };
     document.body.append(script);
   };
   const loadDashboard = () => {
