@@ -34,14 +34,14 @@ test('growth analysis compares first and recent per student without weighting fr
   assert.equal(median([5,1,9,3]),4);
 });
 
-test('growth filter parser keeps language and duration separated and rejects malformed ranges',()=>{
-  assert.deepEqual(growthApi.parseFilters('/api/growth-analytics?language=zh&duration=120&threshold=85&class=701','typing.example'),{
-    className:'701',studentId:null,language:'zh',duration:120,threshold:85,from:null,to:null
+test('growth filter parser keeps language, duration and source separated and rejects malformed ranges',()=>{
+  assert.deepEqual(growthApi.parseFilters('/api/growth-analytics?language=zh&duration=120&threshold=85&class=701&source=all','typing.example'),{
+    className:'701',studentId:null,language:'zh',duration:120,source:'all',threshold:85,from:null,to:null
   });
   assert.equal(growthApi.parseFilters('/api/growth-analytics?threshold=101','typing.example'),null);
   assert.equal(growthApi.parseFilters('/api/growth-analytics?from=2026-09-10&to=2026-09-01','typing.example'),null);
   const defaults=growthApi.parseFilters('/api/growth-analytics','typing.example');
-  assert.equal(defaults.language,'en');assert.equal(defaults.duration,60);assert.equal(defaults.threshold,90);
+  assert.equal(defaults.language,'en');assert.equal(defaults.duration,60);assert.equal(defaults.source,'builtin');assert.equal(defaults.threshold,90);
 });
 
 test('growth analytics accepts real teacher login cookie and rejects tampering',async()=>{
