@@ -5,6 +5,7 @@ const {neon} = require('@neondatabase/serverless');
 const {readCredentials} = require('../lib/teacher-credentials');
 const {ensureAssignmentSchema} = require('../lib/typing-schema');
 const {readStudentSession, sameOrigin} = require('../lib/student-session');
+const {cleanMistakes} = require('../lib/mistake-analysis');
 const COOKIE = '__Host-typing-teacher';
 const TTL = 4 * 60 * 60;
 const digest = value => crypto.createHash('sha256').update(value).digest();
@@ -41,17 +42,19 @@ function cleanRecord(record) {
   const assignmentId = record.assignmentId == null || record.assignmentId === '' ? null :
     (typeof record.assignmentId === 'string' && record.assignmentId.length <= 100 && !/\s/.test(record.assignmentId) ? record.assignmentId : undefined);
   if (assignmentId === undefined) return null;
+  const mistakes = cleanMistakes(record.mistakes, record.language);
+  if (mistakes === null) return null;
   return {
     id: record.id, studentId: record.studentId || null, studentLabel: text(record.studentLabel, 160),
     studentClass: text(record.studentClass, 40), studentName: text(record.studentName, 80), studentSeat: text(record.studentSeat, 20),
     language: record.language, source: record.source, duration: record.duration, elapsedSeconds: Number(record.elapsedSeconds),
     speed: record.speed, unit: record.unit, accuracy: record.accuracy, correctChars: record.correctChars,
     errors: record.errors, typedLength: record.typedLength, targetLength: record.targetLength,
-    assignmentId, createdAt: new Date(record.createdAt).toISOString()
+    assignmentId, mistakes, createdAt: new Date(record.createdAt).toISOString()
   };
 }
 function rowToRecord(row) {
-  return {id:row.id,studentId:row.student_id,studentLabel:row.student_label,studentClass:row.student_class,studentName:row.student_name,studentSeat:row.student_seat,language:row.language,source:row.source,duration:row.duration,elapsedSeconds:Number(row.elapsed_seconds),speed:row.speed,unit:row.unit,accuracy:row.accuracy,correctChars:row.correct_chars,errors:row.errors,typedLength:row.typed_length,targetLength:row.target_length,assignmentId:row.assignment_id || null,createdAt:row.created_at};
+  return {id:row.id,studentId:row.student_id,studentLabel:row.student_label,studentClass:row.student_class,studentName:row.student_name,studentSeat:row.student_seat,language:row.language,source:row.source,duration:row.duration,elapsedSeconds:Number(row.elapsed_seconds),speed:row.speed,unit:row.unit,accuracy:row.accuracy,correctChars:row.correct_chars,errors:row.errors,typedLength:row.typed_length,targetLength:row.target_length,assignmentId:row.assignment_id || null,mistakes:Array.isArray(row.mistakes)?row.mistakes:[],createdAt:row.created_at};
 }
 module.exports = async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
@@ -64,8 +67,8 @@ module.exports = async function handler(req, res) {
     const record = cleanRecord(req.body);
     if (!record) return res.status(400).json({error: '成績資料格式不正確。'});
     try {
+      await ensureAssignmentSchema(sql);
       if (record.assignmentId) {
-        await ensureAssignmentSchema(sql);
         const studentSession = await readStudentSession(sql, req.headers.cookie);
         if (!studentSession) return res.status(401).json({error:'正式作業需要先使用學生啟用碼登入。'});
         if (record.studentId !== studentSession.studentId) return res.status(403).json({error:'待傳作業與目前學生登入身分不一致，請切回原學生後再同步。'});
@@ -85,15 +88,9 @@ module.exports = async function handler(req, res) {
         record.studentLabel = [record.studentClass,record.studentName,record.studentSeat ? record.studentSeat + '號' : ''].filter(Boolean).join(' ｜ ');
         record.createdAt = new Date().toISOString();
       }
-      if (record.assignmentId) {
-        await sql`INSERT INTO typing_records (id, student_id, student_label, student_class, student_name, student_seat, language, source, duration, elapsed_seconds, speed, unit, accuracy, correct_chars, errors, typed_length, target_length, assignment_id, created_at)
-          VALUES (${record.id}, ${record.studentId}, ${record.studentLabel}, ${record.studentClass}, ${record.studentName}, ${record.studentSeat}, ${record.language}, ${record.source}, ${record.duration}, ${record.elapsedSeconds}, ${record.speed}, ${record.unit}, ${record.accuracy}, ${record.correctChars}, ${record.errors}, ${record.typedLength}, ${record.targetLength}, ${record.assignmentId}, ${record.createdAt})
-          ON CONFLICT (id) DO NOTHING`;
-      } else {
-        await sql`INSERT INTO typing_records (id, student_id, student_label, student_class, student_name, student_seat, language, source, duration, elapsed_seconds, speed, unit, accuracy, correct_chars, errors, typed_length, target_length, created_at)
-          VALUES (${record.id}, ${record.studentId}, ${record.studentLabel}, ${record.studentClass}, ${record.studentName}, ${record.studentSeat}, ${record.language}, ${record.source}, ${record.duration}, ${record.elapsedSeconds}, ${record.speed}, ${record.unit}, ${record.accuracy}, ${record.correctChars}, ${record.errors}, ${record.typedLength}, ${record.targetLength}, ${record.createdAt})
-          ON CONFLICT (id) DO NOTHING`;
-      }
+      await sql`INSERT INTO typing_records (id, student_id, student_label, student_class, student_name, student_seat, language, source, duration, elapsed_seconds, speed, unit, accuracy, correct_chars, errors, typed_length, target_length, assignment_id, mistakes, created_at)
+        VALUES (${record.id}, ${record.studentId}, ${record.studentLabel}, ${record.studentClass}, ${record.studentName}, ${record.studentSeat}, ${record.language}, ${record.source}, ${record.duration}, ${record.elapsedSeconds}, ${record.speed}, ${record.unit}, ${record.accuracy}, ${record.correctChars}, ${record.errors}, ${record.typedLength}, ${record.targetLength}, ${record.assignmentId}, ${JSON.stringify(record.mistakes)}::jsonb, ${record.createdAt})
+        ON CONFLICT (id) DO NOTHING`;
       return res.status(201).json({saved: true, id: record.id, assignmentId: record.assignmentId});
     } catch (error) {return res.status(502).json({error: error.message || '雲端資料服務目前無法使用。'});}
   }
