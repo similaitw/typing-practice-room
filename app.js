@@ -81,6 +81,8 @@ async function flushPendingRecords() {
 }
 window.addEventListener('online', flushPendingRecords);
 setInterval(() => {if (navigator.onLine) flushPendingRecords();}, 30000);
+let teacherRecords = [];
+let teacherSyncing = false;
 async function syncCloudRecords() {
   try {
     const response = await fetch('/api/records', {credentials:'same-origin', cache:'no-store'});
@@ -89,6 +91,7 @@ async function syncCloudRecords() {
     const studentsResponse = await fetch('/api/students',{credentials:'same-origin',cache:'no-store'});
     if (!studentsResponse.ok) throw Error();
     data.students = (await studentsResponse.json()).filter(student => student.active);
+    teacherRecords = cloudRecords;
 
     const records = new Map(pendingRecords.map(record => [record.id, record]));
     cloudRecords.forEach(record => records.set(record.id, record));
@@ -424,13 +427,50 @@ function renderTeacher() {
   $('#filter-student').value = [...$('#filter-student').options].some(o => o.value === selected) ? selected : '';
   renderScores();
   protectTeacherActions();
-  syncCloudRecords().then(synced => {if (synced) {fillStudents(); const selected = $('#filter-student').value; $('#filter-student').innerHTML = '<option value="">全部學生與訪客</option><option value="guest">訪客</option>' + data.students.map(s => `<option value="${escapeHtml(s.id)}">${escapeHtml(studentLabel(s))}</option>`).join(''); $('#filter-student').value = selected; renderScores(); stats(); toast('已載入雲端成績。');}});
+  refreshTeacherRecords();
+}
+async function refreshTeacherRecords() {
+  if (!teacherIsActive() || teacherSyncing) return;
+  teacherSyncing = true;
+  try {
+    const synced = await syncCloudRecords();
+    if (!teacherIsActive()) return;
+    $('#teacher-sync-status').textContent = synced ? `已同步資料庫 · ${new Date().toLocaleTimeString('zh-TW')}` : '資料同步失敗，畫面可能不是最新資料，請重新整理。';
+    if (synced) {
+      const selected = $('#filter-student').value;
+      $('#filter-student').innerHTML = '<option value="">全部學生與訪客</option><option value="guest">訪客</option>' + data.students.map(s => `<option value="${escapeHtml(s.id)}">${escapeHtml(studentLabel(s))}</option>`).join('');
+      $('#filter-student').value = [...$('#filter-student').options].some(o => o.value === selected) ? selected : '';
+      renderScores();
+    }
+  } finally {teacherSyncing = false;}
+}
+function refreshVisibleTeacher() {
+  if (document.visibilityState === 'visible' && navigator.onLine && $('#teacher').classList.contains('active')) refreshTeacherRecords();
+}
+setInterval(refreshVisibleTeacher,15000);
+window.addEventListener('online',refreshVisibleTeacher);
+document.addEventListener('visibilitychange',refreshVisibleTeacher);
+$('#teacher-refresh').onclick = refreshTeacherRecords;
+let teacherRankingRequest = 0;
+async function renderTeacherRanking() {
+  const request = ++teacherRankingRequest;
+  try {
+    const response = await fetch(`/api/records?view=leaderboard&language=${$('#leaderboard-language').value}&threshold=90`,{cache:'no-store',signal:AbortSignal.timeout(15000)});
+    if (!response.ok) throw Error();
+    const rows = await response.json();
+    if (request !== teacherRankingRequest || !teacherIsActive()) return;
+    $('#leaderboard').innerHTML = rows.length ? rows.map((r,i) => `<div class="rank"><span class="rank-no">${i + 1}</span><span class="rank-name"><strong>${escapeHtml([r.studentClass,r.studentName,r.studentSeat ? r.studentSeat + '號' : ''].filter(Boolean).join(' ｜ '))}</strong><small>${formatDate(r.createdAt)}</small></span><span class="rank-speed"><strong>${r.speed}</strong><small>${r.unit}</small></span><span class="rank-accuracy">${r.accuracy}%</span></div>`).join('') : '<div class="empty">目前沒有符合門檻的成績。</div>';
+  } catch {
+    if (request === teacherRankingRequest) $('#leaderboard').innerHTML = '<div class="empty">排行榜同步失敗，請重新整理。</div>';
+  }
 }
 async function changeRecord(method, body) {
   try {
     const response = await fetch('/api/records',{method,credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     const result = await response.json();
     if (!response.ok) throw Error(result.error || '儲存失敗。');
+    teacherRecords = teacherRecords.filter(r => r.id !== body.id);
+    if (result.record) teacherRecords.push(result.record);
     data.testRecords = data.testRecords.filter(r => r.id !== body.id);
     pendingRecords = pendingRecords.filter(r => r.id !== body.id);
     if (result.record) data.testRecords.push(result.record);
@@ -440,7 +480,7 @@ async function changeRecord(method, body) {
 }
 function filteredRecords() {
   const student = $('#filter-student').value, language = $('#filter-language').value, duration = Number($('#filter-duration').value);
-  return data.testRecords.filter(r => (!student || (student === 'guest' ? r.studentId === null : r.studentId === student)) && (!language || r.language === language) && (!duration || r.duration === duration)).sort((a,b) => b.createdAt.localeCompare(a.createdAt));
+  return teacherRecords.filter(r => (!student || (student === 'guest' ? r.studentId === null : r.studentId === student)) && (!language || r.language === language) && (!duration || r.duration === duration)).sort((a,b) => b.createdAt.localeCompare(a.createdAt));
 }
 function renderScores() {
   if (!teacherIsActive()) return;
@@ -448,9 +488,7 @@ function renderScores() {
   const classroom = records.filter(r => ids.has(r.studentId));
   const avg = (rows,k) => rows.length ? Math.round(rows.reduce((sum,r) => sum + r[k],0) / rows.length) : '--';
   $('#summary').innerHTML = [['班級人數',data.students.length],['已參與學生',new Set(classroom.map(r => r.studentId)).size],['測驗次數（含訪客）',records.length],['班級平均 WPM',avg(classroom.filter(r => r.language === 'en'),'speed')],['班級平均 CPM',avg(classroom.filter(r => r.language === 'zh'),'speed')],['班級平均正確率',avg(classroom,'accuracy') + '%']].map(([label,value]) => `<div><span>${label}</span><strong>${value}</strong></div>`).join('');
-  const lang = $('#leaderboard-language').value, threshold = Number($('#threshold').value);
-  const rows = C.rank(records,lang,threshold,data.students);
-  $('#leaderboard').innerHTML = rows.length ? rows.map((r,i) => `<div class="rank"><span class="rank-no">${i + 1}</span><span class="rank-name"><strong>${escapeHtml(r.studentLabel)}</strong><small>${formatDate(r.createdAt)}</small></span><span class="rank-speed"><strong>${r.speed}</strong><small>${r.unit}</small></span><span class="rank-accuracy">${r.accuracy}%</span></div>`).join('') : '<div class="empty">目前沒有符合篩選與門檻的成績。</div>';
+  renderTeacherRanking();
   $('#record-table').innerHTML = records.length ? `<div class="record-wrap"><table class="record"><caption>測驗明細，依日期由新到舊，共 ${records.length} 筆</caption><thead><tr><th>學生</th><th>語言</th><th>速度</th><th>正確率</th><th>設定／實際秒數</th><th>日期</th><th>操作</th></tr></thead><tbody>${records.map((r,i) => `<tr><td>${escapeHtml(r.studentLabel)}</td><td>${r.language === 'zh' ? '中文' : '英文'}</td><td>${r.speed} ${r.unit}</td><td>${r.accuracy}%</td><td>${r.duration} / ${r.elapsedSeconds}</td><td>${formatDate(r.createdAt)}</td><td><button data-edit-record="${i}">編輯</button> <button class="table-delete" data-record="${i}">刪除</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">沒有符合篩選的測驗紀錄。</div>';
   $$('[data-edit-record]').forEach(b => b.onclick = async () => {
     const r = records[Number(b.dataset.editRecord)], next = {id:r.id};
@@ -475,8 +513,6 @@ function renderScores() {
   protectTeacherActions();
 }
 $('#leaderboard-language').onchange = renderScores;
-$('#threshold').value = data.settings.threshold ?? 90;
-$('#threshold').onchange = () => {const value = Number($('#threshold').value); $('#threshold').value = Math.max(0,Math.min(100,Number.isFinite(value) ? value : 90)); data.settings.threshold = Number($('#threshold').value); save(); renderScores();};
 ['#filter-student','#filter-language','#filter-duration'].forEach(id => $(id).onchange = renderScores);
 function download(name, content, type) {
   const url = URL.createObjectURL(new Blob([content],{type})), a = document.createElement('a');
