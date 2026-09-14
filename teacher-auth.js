@@ -99,117 +99,26 @@ document.addEventListener('visibilitychange',() => {
   if (!document.hidden && document.querySelector('#teacher').classList.contains('active')) openTeacher();
 });
 
-// app.js is parsed after this file. Load optional cloud modules only after its global helpers exist.
+// Keep the teacher side deliberately small: cloud roster + simple leaderboard only.
 window.addEventListener('load', () => {
-  const loadMyRecords = () => {
-    if (document.querySelector('script[data-my-records]')) return;
+  const loadSimpleRanking = () => {
+    if (document.querySelector('script[data-simple-ranking]')) return;
     const script = document.createElement('script');
-    script.src = 'my-records.js';
-    script.dataset.myRecords = 'true';
+    script.src = 'simple-ranking.js';
+    script.dataset.simpleRanking = 'true';
     script.async = false;
-    script.onerror = () => console.warn('my-records.js could not be loaded; existing student and teacher tools remain available.');
+    script.onerror = () => console.warn('simple-ranking.js could not be loaded; base typing practice remains available.');
     document.body.append(script);
   };
-  const loadReport = () => {
-    if (document.querySelector('script[data-teacher-report]')) return loadMyRecords();
-    const script = document.createElement('script');
-    script.src = 'report.js';
-    script.dataset.teacherReport = 'true';
-    script.async = false;
-    script.onload = loadMyRecords;
-    script.onerror = () => {
-      console.warn('report.js could not be loaded; growth analytics and existing teacher tools remain available.');
-      loadMyRecords();
-    };
-    document.body.append(script);
-  };
-  const loadGrowth = () => {
-    if (document.querySelector('script[data-growth-analytics]')) return loadReport();
-    const script = document.createElement('script');
-    script.src = 'growth-analytics.js';
-    script.dataset.growthAnalytics = 'true';
-    script.async = false;
-    script.onload = loadReport;
-    script.onerror = () => {
-      console.warn('growth-analytics.js could not be loaded; existing teacher tools remain available.');
-      loadReport();
-    };
-    document.body.append(script);
-  };
-  const loadWeakPractice = () => {
-    const loadUI = () => {
-      if (document.querySelector('script[data-weak-key-practice]')) return loadGrowth();
-      const script = document.createElement('script');
-      script.src = 'weak-key-practice.js';
-      script.dataset.weakKeyPractice = 'true';
-      script.async = false;
-      script.onload = loadGrowth;
-      script.onerror = () => {
-        console.warn('weak-key-practice.js could not be loaded; mistake analytics remains available.');
-        loadGrowth();
-      };
-      document.body.append(script);
-    };
-    if (typeof WeakKeyCore !== 'undefined' || document.querySelector('script[data-weak-key-core]')) return loadUI();
-    const core = document.createElement('script');
-    core.src = 'weak-key-core.js';
-    core.dataset.weakKeyCore = 'true';
-    core.async = false;
-    core.onload = loadUI;
-    core.onerror = () => {
-      console.warn('weak-key-core.js could not be loaded; weak-key practice is unavailable.');
-      loadGrowth();
-    };
-    document.body.append(core);
-  };
-  const loadMistakes = () => {
-    if (document.querySelector('script[data-mistake-analytics]')) return loadWeakPractice();
-    const script = document.createElement('script');
-    script.src = 'mistake-analytics.js';
-    script.dataset.mistakeAnalytics = 'true';
-    script.async = false;
-    script.onload = loadWeakPractice;
-    script.onerror = () => {
-      console.warn('mistake-analytics.js could not be loaded; typing and assignments remain available.');
-      loadWeakPractice();
-    };
-    document.body.append(script);
-  };
-  const loadDashboard = () => {
-    if (document.querySelector('script[data-assignment-dashboard]')) return loadMistakes();
-    const script = document.createElement('script');
-    script.src = 'assignment-dashboard.js';
-    script.dataset.assignmentDashboard = 'true';
-    script.async = false;
-    script.onload = loadMistakes;
-    script.onerror = () => {
-      console.warn('assignment-dashboard.js could not be loaded; assignment management remains available.');
-      loadMistakes();
-    };
-    document.body.append(script);
-  };
-  const loadAssignments = () => {
-    if (document.querySelector('script[data-assignments]')) return loadDashboard();
-    const script = document.createElement('script');
-    script.src = 'assignments.js';
-    script.dataset.assignments = 'true';
-    script.async = false;
-    script.onload = loadDashboard;
-    script.onerror = () => {
-      console.warn('assignments.js could not be loaded; base typing practice remains available.');
-      loadDashboard();
-    };
-    document.body.append(script);
-  };
-  if (document.querySelector('script[data-cloud-students]')) return loadAssignments();
+  if (document.querySelector('script[data-cloud-students]')) return loadSimpleRanking();
   const cloudStudentsScript = document.createElement('script');
   cloudStudentsScript.src = 'cloud-students.js';
   cloudStudentsScript.dataset.cloudStudents = 'true';
   cloudStudentsScript.async = false;
-  cloudStudentsScript.onload = loadAssignments;
+  cloudStudentsScript.onload = loadSimpleRanking;
   cloudStudentsScript.onerror = () => {
     console.warn('cloud-students.js could not be loaded; local roster remains available.');
-    loadAssignments();
+    loadSimpleRanking();
   };
   document.body.append(cloudStudentsScript);
 });
