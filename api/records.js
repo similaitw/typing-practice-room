@@ -92,7 +92,7 @@ module.exports = async function handler(req, res) {
       return res.status(201).json({saved: true, id: record.id, assignmentId: record.assignmentId});
     } catch (error) {return res.status(502).json({error: error.message || '雲端資料服務目前無法使用。'});}
   }
-  if (req.method !== 'GET') {res.setHeader('Allow', 'GET, POST'); return res.status(405).json({error: '不支援此操作。'});}
+  if (!['GET','PATCH','DELETE'].includes(req.method)) {res.setHeader('Allow', 'GET, POST, PATCH, DELETE'); return res.status(405).json({error: '不支援此操作。'});}
   const publicQuery = new URL(req.url, `https://${req.headers.host}`).searchParams;
   if (publicQuery.get('view') === 'leaderboard') {
     const language = publicQuery.get('language') === 'zh' ? 'zh' : 'en';
@@ -100,11 +100,13 @@ module.exports = async function handler(req, res) {
     const threshold = Number.isInteger(requestedThreshold) && requestedThreshold >= 0 && requestedThreshold <= 100 ? requestedThreshold : 90;
     try {
       const rows = await sql`WITH best AS (
-        SELECT student_class, student_name, student_seat, speed, unit, accuracy, created_at,
-          ROW_NUMBER() OVER (PARTITION BY student_class, student_name, student_seat
-            ORDER BY speed DESC, accuracy DESC, created_at DESC, id) AS position
-        FROM typing_records WHERE language = ${language} AND accuracy >= ${threshold}
-          AND student_id IS NOT NULL AND student_class <> '' AND student_name <> '' AND student_seat <> ''
+        SELECT r.student_class, r.student_name, r.student_seat, r.speed, r.unit, r.accuracy, r.created_at,
+          ROW_NUMBER() OVER (PARTITION BY r.student_class, r.student_name, r.student_seat
+            ORDER BY r.speed DESC, r.accuracy DESC, r.created_at DESC, r.id) AS position
+        FROM typing_records r
+        JOIN typing_students s ON s.id = r.student_id AND s.active = true
+        WHERE r.language = ${language} AND r.accuracy >= ${threshold}
+          AND r.student_id IS NOT NULL AND r.student_class <> '' AND r.student_name <> '' AND r.student_seat <> ''
       ) SELECT student_class, student_name, student_seat, speed, unit, accuracy, created_at
         FROM best WHERE position = 1 ORDER BY speed DESC, accuracy DESC, created_at DESC,
           student_class, student_name, student_seat LIMIT 2000`;
@@ -118,6 +120,25 @@ module.exports = async function handler(req, res) {
   try {credentials = await readCredentials();}
   catch {return res.status(503).json({error:'目前無法讀取教師登入設定，請稍後再試。'});}
   if (!sessionValid(req.headers.cookie, settings.secret, credentials.sessionKey)) return res.status(401).json({error: '請先登入教師端。'});
+  if (['PATCH','DELETE'].includes(req.method)) {
+    if (!sameOrigin(req)) return res.status(403).json({error:'來源驗證失敗。'});
+    const body = req.body || {};
+    if (typeof body.id !== 'string' || !body.id || body.id.length > 100) return res.status(400).json({error:'成績 ID 不正確。'});
+    try {
+      if (req.method === 'DELETE') {
+        const rows = await sql`DELETE FROM typing_records WHERE id = ${body.id} RETURNING id`;
+        return res.status(rows.length ? 200 : 404).json(rows.length ? {deleted:true} : {error:'找不到這筆成績。'});
+      }
+      const text = (value,max) => typeof value === 'string' && value.trim().length <= max && !/[\r\n\t]/.test(value);
+      if (!text(body.studentClass,40) || !text(body.studentName,80) || !text(body.studentSeat,20) ||
+          !Number.isInteger(body.speed) || body.speed < 0 || body.speed > 100000 ||
+          !Number.isInteger(body.accuracy) || body.accuracy < 0 || body.accuracy > 100) return res.status(400).json({error:'班級、姓名、座號或成績格式不正確。正確率需為 0–100 的整數。'});
+      const studentClass = body.studentClass.trim(), studentName = body.studentName.trim(), studentSeat = body.studentSeat.trim();
+      const label = [studentClass,studentName,studentSeat ? studentSeat + '號' : ''].filter(Boolean).join(' ｜ ') || '訪客';
+      const rows = await sql`UPDATE typing_records SET student_class = ${studentClass}, student_name = ${studentName}, student_seat = ${studentSeat}, student_label = ${label}, speed = ${body.speed}, accuracy = ${body.accuracy} WHERE id = ${body.id} RETURNING *`;
+      return res.status(rows.length ? 200 : 404).json(rows.length ? {record:rowToRecord(rows[0])} : {error:'找不到這筆成績。'});
+    } catch {return res.status(502).json({error:'成績更新失敗，請稍後再試。'});}
+  }
   const query = new URL(req.url, `https://${req.headers.host}`).searchParams;
   const studentId = query.get('studentId'), language = ['en', 'zh'].includes(query.get('language')) ? query.get('language') : null;
   const duration = [15, 30, 60, 120].includes(Number(query.get('duration'))) ? Number(query.get('duration')) : null;

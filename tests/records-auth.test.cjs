@@ -34,6 +34,15 @@ test('cloud query accepts the session issued by teacher login and rejects tamper
     assert.equal(queries,0,'unauthorized requests must not query database');
     assert.equal((await query(cookie)).code,200,'a real teacher login must authorize cloud queries');
     assert.equal(queries,1);
+    const mutate=async(method,body,session=cookie)=>{const res=response();await handler({method,body,url:'/api/records',headers:{host:'typing.example',cookie:session}},res);return res;};
+    for(const method of ['PATCH','DELETE']) assert.equal((await mutate(method,{id:'record'},'')).code,401);
+    assert.equal(queries,1,'unauthorized mutations must not query database');
+    assert.equal((await mutate('PATCH',{id:'record',studentClass:'701',studentName:'同學',studentSeat:'01',speed:50,accuracy:101})).code,400);
+    assert.equal(queries,1,'invalid scores must not reach database');
+    assert.equal((await mutate('PATCH',{id:'record',studentClass:'701',studentName:'同學',studentSeat:'01',speed:50,accuracy:95})).code,404);
+    assert.equal((await mutate('DELETE',{id:'record'})).code,404);
+    assert.equal(queries,3,'valid mutations must query database and report missing records');
+
   } finally {
     for(const [name,value] of [['TEACHER_PASSWORD',original.password],['TEACHER_SESSION_SECRET',original.secret]]) {
       if(value===undefined)delete process.env[name];else process.env[name]=value;

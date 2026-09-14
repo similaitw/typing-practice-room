@@ -13,7 +13,8 @@ test('public leaderboard uses database identity ranking and returns only display
  const res={setHeader(){},status(code){this.code=code;return this;},json(body){this.body=body;return this;}};
  await context.module.exports({method:'GET',url:'/api/records?view=leaderboard&language=zh&threshold=95',headers:{host:'test'}},res);
  assert.equal(res.code,200); assert.deepEqual(values,['zh',95]);
- assert.match(statement,/PARTITION BY student_class, student_name, student_seat/);
- assert.match(statement,/position = 1/);assert.match(statement,/student_id IS NOT NULL/);
+ assert.match(statement,/PARTITION BY r\.student_class, r\.student_name, r\.student_seat/);
+ assert.match(statement,/JOIN typing_students s ON s\.id = r\.student_id AND s\.active = true/);
+ assert.match(statement,/position = 1/);assert.match(statement,/r\.student_id IS NOT NULL/);
  assert.equal(res.body[0].studentName,'甲');assert.equal(res.body[0].id,undefined);assert.equal(res.body[0].studentId,undefined);
 });

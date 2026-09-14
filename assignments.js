@@ -228,7 +228,7 @@
   function refreshTeacherAssignmentUI(){ensureTeacherAssignmentsUI();refreshTeacherControls();loadTeacherAssignments();}
 
   const previousRenderTeacher = renderTeacher;
-  renderTeacher = function assignmentsRenderTeacher(){previousRenderTeacher();ensureTeacherAssignmentsUI();refreshTeacherControls();};
+  renderTeacher = function assignmentsRenderTeacher(){previousRenderTeacher();if(document.querySelector('#teacher .tabs')){ensureTeacherAssignmentsUI();refreshTeacherControls();}};
 
   ensureStudentUI();
   ensureAssignmentBanner();

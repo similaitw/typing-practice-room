@@ -9,7 +9,7 @@ function load() {
     const raw = localStorage.getItem(KEY);
     return raw ? C.validateData(JSON.parse(raw)) : C.emptyData();
   } catch {
-    storageIssue = '原有瀏覽器資料無法讀取，已以空白畫面啟動；請先下載原始資料或還原有效備份。';
+    storageIssue = '原有瀏覽器資料無法讀取，已以空白畫面啟動；請先下載原始資料以便修復。';
     return C.emptyData();
   }
 }
@@ -37,7 +37,7 @@ function toast(message) {
   toast.timeout = setTimeout(() => $('#toast').classList.remove('show'), 4500);
 }
 function save() {
-  if (storageIssue) {toast('請先處理上方資料還原提示；目前變更暫存在此頁，請匯出 JSON 備份。'); return;}
+  if (storageIssue) {toast('請先處理上方資料還原提示；目前變更暫存在此頁，請保留此頁並下載原始資料。'); return;}
   try {localStorage.setItem(KEY, JSON.stringify(data));}
   catch {toast('瀏覽器無法儲存，請匯出 JSON 保存目前資料。');}
 }
@@ -86,7 +86,11 @@ async function syncCloudRecords() {
     const response = await fetch('/api/records', {credentials:'same-origin', cache:'no-store'});
     if (!response.ok) throw Error();
     const cloudRecords = await response.json();
-    const records = new Map(data.testRecords.map(record => [record.id, record]));
+    const studentsResponse = await fetch('/api/students',{credentials:'same-origin',cache:'no-store'});
+    if (!studentsResponse.ok) throw Error();
+    data.students = (await studentsResponse.json()).filter(student => student.active);
+
+    const records = new Map(pendingRecords.map(record => [record.id, record]));
     cloudRecords.forEach(record => records.set(record.id, record));
     data.testRecords = [...records.values()].sort((a,b) => b.createdAt.localeCompare(a.createdAt));
     save();
@@ -317,7 +321,7 @@ function finishTest(measured) {
   renderPlayerRanking();
   $('#test-state').textContent = '測驗完成';
   const panel = $('#result-panel'); panel.hidden = false;
-  panel.innerHTML = `<h2 tabindex="-1">${m.accuracy >= 90 ? '穩穩完成！' : '每次練習都算數。'}</h2><p>${m.typed ? escapeHtml(record.studentLabel) + ' · 已記錄本次結果' : '沒有輸入字元，本次不儲存成績'}</p><div class="result-stats"><div><strong>${m.speed}</strong><span>${record.unit}</span></div><div><strong>${m.accuracy}%</strong><span>正確率</span></div><div><strong>${m.correct}</strong><span>正確字元</span></div><div><strong>${m.errors}</strong><span>錯字</span></div></div><button id="again" class="btn">再測一次 ↻</button>`;
+  panel.innerHTML = `<h2 tabindex="-1">${m.accuracy >= 90 ? '穩穩完成！' : '每次練習都算數。'}</h2><p>${m.typed ? escapeHtml(record.studentLabel) + ' · 已記錄本次結果' : '沒有輸入字元，本次不儲存成績'}</p><div class="result-stats"><div><strong>${m.speed}</strong><span>${record.unit}</span></div><div><strong>${m.accuracy}%</strong><span>正確率</span></div><div><strong>${m.errors}</strong><span>錯字</span></div></div><button id="again" class="btn">再測一次 ↻</button>`;
   $('#again').onclick = () => {resetTest(); $('#test-input').focus();};
   const rankingButton = document.createElement('button');
   rankingButton.className = 'btn'; rankingButton.textContent = '查看排行榜 ↓';
@@ -412,56 +416,27 @@ function fillStudents() {
   $('#student-select').value = activeStudent;
   syncIdentity();
 }
-function parseRoster(raw) {
-  return raw.split(/\r?\n/).map(x => x.trim()).filter(Boolean).map(line => {
-    const full = line.match(/^(\S+)\s+(\d+)\s+(.+)$/);
-    if (full) {
-      if (full[1].length > 40 || full[2].length > 20 || full[3].length > 80) throw Error('班級、姓名或座號過長。');
-      return {className:full[1],seat:full[2].padStart(2,'0'),name:full[3].trim()};
-    }
-    const m = line.match(/^(\d+)\s+(.+)$/);
-    const seat = m ? m[1].padStart(2,'0') : '', name = (m ? m[2] : line).trim();
-    if (name.length > 80 || seat.length > 20) throw Error('姓名最多 80 字、座號最多 20 字。');
-    return {seat,name};
-  });
-}
-function mergeRoster(entries) {
-  if (entries.length + data.students.length > 2000) throw Error('學生名單最多 2000 位。');
-  let added = 0;
-  for (const entry of entries) {
-    if (!data.students.some(s => (s.className || '') === (entry.className || '') && s.seat === entry.seat && s.name === entry.name)) {
-      data.students.push({...entry,id:uid(),createdAt:new Date().toISOString()}); added++;
-    }
-  }
-  return added;
-}
 function renderTeacher() {
   if (!teacherIsActive()) return;
   fillStudents();
-  $('#student-count').textContent = `${data.students.length} 人`;
-  $('#student-list').innerHTML = data.students.length ? data.students.map((s,i) => `<div class="student"><span><small>${escapeHtml(s.className || '未填班級')}</small>${escapeHtml(s.name)} ${escapeHtml(s.seat ? s.seat + '號' : '')}</span><div class="actions"><button data-edit="${i}" aria-label="編輯 ${escapeHtml(s.name)}">編輯</button><button data-remove="${i}" aria-label="刪除 ${escapeHtml(s.name)}">刪除</button></div></div>`).join('') : '<div class="empty">還沒有學生名單。</div>';
-  $$('[data-edit]').forEach(b => b.onclick = () => {
-    const s = data.students[Number(b.dataset.edit)];
-    const className = prompt('修改班級（舊資料可留空）',s.className || ''); if (className === null) return;
-    const seat = prompt('修改座號（可留空）',s.seat); if (seat === null) return;
-    const name = prompt('修改姓名',s.name); if (name === null) return;
-    if (className.trim().length > 40 || !name.trim() || name.trim().length > 80 || seat.trim().length > 20 || /[\r\n\t]/.test(className + name + seat)) return toast('姓名或座號格式不正確。');
-    if (data.students.some(other => other.id !== s.id && (other.className || '') === className.trim() && other.name === name.trim() && other.seat === seat.trim())) return toast('已有相同班級、姓名與座號的學生。');
-    s.className = className.trim(); s.seat = seat.trim(); s.name = name.trim();
-    updateStudentRecords(s);
-    save(); renderTeacher(); stats();
-  });
-  $$('[data-remove]').forEach(b => b.onclick = () => {
-    const s = data.students[Number(b.dataset.remove)];
-    if (!confirm(`刪除「${s.name}」？歷史成績會保留，但不再列入班級排行榜。`)) return;
-    data.students = data.students.filter(x => x.id !== s.id); save(); renderTeacher(); stats();
-  });
   const selected = $('#filter-student').value;
   $('#filter-student').innerHTML = '<option value="">全部學生與訪客</option><option value="guest">訪客</option>' + data.students.map(s => `<option value="${escapeHtml(s.id)}">${escapeHtml(studentLabel(s))}</option>`).join('');
   $('#filter-student').value = [...$('#filter-student').options].some(o => o.value === selected) ? selected : '';
   renderScores();
   protectTeacherActions();
-  syncCloudRecords().then(synced => {if (synced) {renderScores(); stats(); toast('已載入雲端成績。');}});
+  syncCloudRecords().then(synced => {if (synced) {fillStudents(); const selected = $('#filter-student').value; $('#filter-student').innerHTML = '<option value="">全部學生與訪客</option><option value="guest">訪客</option>' + data.students.map(s => `<option value="${escapeHtml(s.id)}">${escapeHtml(studentLabel(s))}</option>`).join(''); $('#filter-student').value = selected; renderScores(); stats(); toast('已載入雲端成績。');}});
+}
+async function changeRecord(method, body) {
+  try {
+    const response = await fetch('/api/records',{method,credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const result = await response.json();
+    if (!response.ok) throw Error(result.error || '儲存失敗。');
+    data.testRecords = data.testRecords.filter(r => r.id !== body.id);
+    pendingRecords = pendingRecords.filter(r => r.id !== body.id);
+    if (result.record) data.testRecords.push(result.record);
+    savePending(); save(); renderScores(); stats(); renderPlayerRanking();
+    toast(method === 'DELETE' ? '成績已從資料庫刪除。' : '成績已更新至資料庫。');
+  } catch (error) {toast(error.message);}
 }
 function filteredRecords() {
   const student = $('#filter-student').value, language = $('#filter-language').value, duration = Number($('#filter-duration').value);
@@ -476,8 +451,20 @@ function renderScores() {
   const lang = $('#leaderboard-language').value, threshold = Number($('#threshold').value);
   const rows = C.rank(records,lang,threshold,data.students);
   $('#leaderboard').innerHTML = rows.length ? rows.map((r,i) => `<div class="rank"><span class="rank-no">${i + 1}</span><span class="rank-name"><strong>${escapeHtml(r.studentLabel)}</strong><small>${formatDate(r.createdAt)}</small></span><span class="rank-speed"><strong>${r.speed}</strong><small>${r.unit}</small></span><span class="rank-accuracy">${r.accuracy}%</span></div>`).join('') : '<div class="empty">目前沒有符合篩選與門檻的成績。</div>';
-  $('#record-table').innerHTML = records.length ? `<div class="record-wrap"><table class="record"><caption>測驗明細，依日期由新到舊，共 ${records.length} 筆</caption><thead><tr><th>學生</th><th>語言</th><th>速度</th><th>正確率</th><th>設定／實際秒數</th><th>日期</th><th>操作</th></tr></thead><tbody>${records.map((r,i) => `<tr><td>${escapeHtml(r.studentLabel)}</td><td>${r.language === 'zh' ? '中文' : '英文'}</td><td>${r.speed} ${r.unit}</td><td>${r.accuracy}%</td><td>${r.duration} / ${r.elapsedSeconds}</td><td>${formatDate(r.createdAt)}</td><td><button class="table-delete" data-record="${i}">刪除</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">沒有符合篩選的測驗紀錄。</div>';
-  $$('[data-record]').forEach(b => b.onclick = () => {const r = records[Number(b.dataset.record)]; if (!confirm(`刪除 ${r.studentLabel} 這筆測驗紀錄？`)) return; data.testRecords = data.testRecords.filter(x => x.id !== r.id); save(); renderScores(); stats();});
+  $('#record-table').innerHTML = records.length ? `<div class="record-wrap"><table class="record"><caption>測驗明細，依日期由新到舊，共 ${records.length} 筆</caption><thead><tr><th>學生</th><th>語言</th><th>速度</th><th>正確率</th><th>設定／實際秒數</th><th>日期</th><th>操作</th></tr></thead><tbody>${records.map((r,i) => `<tr><td>${escapeHtml(r.studentLabel)}</td><td>${r.language === 'zh' ? '中文' : '英文'}</td><td>${r.speed} ${r.unit}</td><td>${r.accuracy}%</td><td>${r.duration} / ${r.elapsedSeconds}</td><td>${formatDate(r.createdAt)}</td><td><button data-edit-record="${i}">編輯</button> <button class="table-delete" data-record="${i}">刪除</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">沒有符合篩選的測驗紀錄。</div>';
+  $$('[data-edit-record]').forEach(b => b.onclick = async () => {
+    const r = records[Number(b.dataset.editRecord)], next = {id:r.id};
+    for (const [key,label] of [['studentClass','班級'],['studentName','姓名'],['studentSeat','座號'],['speed','速度'],['accuracy','正確率']]) {
+      const value = prompt(`修改${label}`,r[key] ?? '');
+      if (value === null) return;
+      next[key] = ['speed','accuracy'].includes(key) ? Number(value) : value.trim();
+    }
+    await changeRecord('PATCH',next);
+  });
+  $$('[data-record]').forEach(b => b.onclick = async () => {
+    const r = records[Number(b.dataset.record)];
+    if (confirm(`刪除 ${r.studentLabel} 這筆測驗紀錄？資料庫也會刪除，無法復原。`)) await changeRecord('DELETE',{id:r.id});
+  });
   const studentRows = data.students.filter(s => !$('#filter-student').value || s.id === $('#filter-student').value).map(s => {
     const own = records.filter(r => r.studentId === s.id);
     const best = language => {const r = own.filter(r => r.language === language).sort(C.compareScores)[0]; return r ? `${r.speed} ${r.unit}` : '--';};
@@ -487,12 +474,6 @@ function renderScores() {
   $('#student-summary').innerHTML = `<div class="record-wrap"><table class="record"><caption>每位學生最佳與最近成績（依目前篩選，未套用排行正確率門檻）</caption><thead><tr><th>學生</th><th>最佳英文</th><th>最佳中文</th><th>最近成績</th></tr></thead><tbody>${studentRows.join('')}</tbody></table></div>`;
   protectTeacherActions();
 }
-$('#save-roster').onclick = () => {
-  try {const added = mergeRoster(pendingRoster || parseRoster($('#roster-input').value)); pendingRoster = null; $('#roster-input').value = ''; save(); renderTeacher(); toast(`新增 ${added} 位學生，已略過相同班級、姓名與座號。`);}
-  catch (e) {toast(e.message);}
-};
-$('#roster-input').oninput = () => {pendingRoster = null;};
-$('#fill-roster').onclick = () => {pendingRoster = null; $('#roster-input').value = '01 練習同學甲\n02 練習同學乙\n03 練習同學丙';};
 $('#leaderboard-language').onchange = renderScores;
 $('#threshold').value = data.settings.threshold ?? 90;
 $('#threshold').onchange = () => {const value = Number($('#threshold').value); $('#threshold').value = Math.max(0,Math.min(100,Number.isFinite(value) ? value : 90)); data.settings.threshold = Number($('#threshold').value); save(); renderScores();};
@@ -501,42 +482,11 @@ function download(name, content, type) {
   const url = URL.createObjectURL(new Blob([content],{type})), a = document.createElement('a');
   a.href = url; a.download = name; document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url),1000);
 }
-$('#export-json').onclick = () => download('typing-practice-room-backup.json',JSON.stringify(data,null,2),'application/json;charset=utf-8');
 function exportCSV() {
   const rows = [['班級','姓名','座號','學生','語言','速度','單位','正確率','正確字元','錯誤','設定秒數','實際秒數','日期'],...filteredRecords().map(r => [r.studentClass ?? data.students.find(s => s.id === r.studentId)?.className ?? '',r.studentName ?? data.students.find(s => s.id === r.studentId)?.name ?? '',r.studentSeat ?? data.students.find(s => s.id === r.studentId)?.seat ?? '',r.studentLabel,r.language === 'zh' ? '中文' : '英文',r.speed,r.unit,r.accuracy,r.correctChars,r.errors,r.duration,r.elapsedSeconds,r.createdAt])];
   download('typing-practice-room-records.csv','\uFEFF' + rows.map(row => row.map(C.csvCell).join(',')).join('\r\n'),'text/csv;charset=utf-8');
 }
 $('#export-csv').onclick = exportCSV;
-async function readImport(input, maxBytes, extension) {
-  const file = input.files[0]; if (!file) return null;
-  if (!file.name.toLowerCase().endsWith(extension) || file.size > maxBytes) throw Error(`請選擇 ${extension} 檔案，大小上限 ${maxBytes / 1024 / 1024} MB。`);
-  return file.text();
-}
-$('#csv-input').onchange = async e => {
-  try {const text = await readImport(e.target,1024 * 1024,'.csv'); if (text === null) return; const entries = C.rosterCSV(text); if (entries.length > 2000) throw Error('名單最多 2000 位。'); pendingRoster = entries; $('#roster-input').value = entries.map(s => `${s.className || ''} ${s.seat} ${s.name}`.trim()).join('\n'); toast('CSV 已讀取，請確認名單再按「儲存名單」。');}
-  catch (error) {toast(error.message);} finally {e.target.value = '';}
-};
-$('#json-input').onchange = async e => {
-  try {
-    const text = await readImport(e.target,20 * 1024 * 1024,'.json'); if (text === null) return;
-    const restored = C.validateData(JSON.parse(text));
-    if (!confirm(`將以備份的 ${restored.students.length} 位學生、${restored.testRecords.length} 筆成績取代目前資料。確定還原？`)) return;
-    data = restored; storageIssue = ''; $('#storage-warning').hidden = true; activeStudent = '';
-    $('#threshold').value = data.settings.threshold ?? 90;
-    save(); stats(); renderTeacher(); renderLessons(); toast('資料已還原。');
-  } catch (error) {toast(error instanceof SyntaxError ? 'JSON 格式不正確，原有資料未變更。' : error.message);} finally {e.target.value = '';}
-};
-$('#clear-data').onclick = () => {
-  if (!confirm('確定清除所有學生、課程進度與測驗紀錄？建議先匯出備份。')) return;
-  if (!confirm('再次確認：清除後無法復原，仍要繼續？')) return;
-  data = C.emptyData(); storageIssue = ''; $('#storage-warning').hidden = true; activeStudent = '';
-  $('#threshold').value = 90; save(); renderTeacher(); renderLessons(); stats(); toast('全部資料已清除。');
-};
-$$('.tab').forEach(t => t.onclick = () => {
-  $$('.tab').forEach(x => {x.classList.toggle('active',x === t); x.setAttribute('aria-pressed',x === t);});
-  $$('.panel').forEach(x => x.classList.toggle('active',x.id === 'panel-' + t.dataset.panel));
-  if (t.dataset.panel === 'scores') renderScores();
-});
 if (storageIssue) {
   $('#storage-warning').hidden = false; $('#storage-message').textContent = storageIssue;
   $('#download-raw').onclick = () => {try {download('typing-practice-room-recovery.txt',localStorage.getItem(KEY) || '', 'text/plain');} catch {toast('瀏覽器禁止讀取儲存空間。');}};
