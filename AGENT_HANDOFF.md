@@ -2,6 +2,16 @@
 
 > 本檔只維護目前可直接接手的功能基準；較早逐次紀錄保留在 Git 歷史。
 
+## 2026-09-14｜成績上傳修復
+
+- 正式站 `POST /api/records` 曾持續回傳 502：先遇到 `permission denied for schema public`，移除成績 API 的 runtime 建表後，確認另缺少 `typing_records.mistakes` 欄位。
+- Commit `8ab7534` 已部署：成績 API 使用既有資料表；前端保留待傳成績並顯示 HTTP 錯誤原因；公開排行榜在可見時每 15 秒刷新，回到分頁與恢復連線時也刷新。
+- 已在 production 執行 `ALTER TABLE public.typing_records ADD COLUMN IF NOT EXISTS mistakes jsonb`，未更動既有成績。
+- 50 項 Node 測試與 GitHub CI 通過。CI 改用 `node --test`，納入排行榜與上傳權限回歸測試。
+- 正式 API 以不列入排行榜的訪客測試成績確認 HTTP 201，並直接核對資料庫成績與錯鍵資料；驗證後已刪除該筆測試成績。
+- 使用者瀏覽器內原有待傳成績是否成功重送，仍待該瀏覽器確認。不可清除待傳佇列或瀏覽器資料。
+- 後續 schema 變更須以管理連線套用 SQL migration，成績 API 不再自動建表；其他 API 的 runtime schema 初始化尚未在本次修改。
+
 ## 2026-09-09｜目前功能基準
 
 - Production：`https://typing-practice-room.vercel.app`
@@ -117,7 +127,7 @@
 
 若使用者說「繼續」且沒有指定方向，優先從技術／教學實用待辦選擇：
 
-1. **公開排行榜排除已停用學生**：目前 handoff 持續列為遺留，應讓 `active=false` 不再出現在公開排行榜，但保留歷史成績。
+1. **部署公開排行榜修正**：本地已讓 `active=false` 不再出現在公開排行榜，但仍需部署到 Production；歷史成績保留。
 2. Production 真實 E2E：教師→學生→作業→錯鍵→弱鍵→課程進度→我的紀錄→報表完整流程。
 3. 安全／可信度：若需求提高，再做 attempt token／server-side 核對；目前系統不是正式考試防作弊工具。
 4. 可維護性：逐步抽共用 teacher/student session 驗證與重複 filter parser，但不要改框架。
@@ -125,7 +135,7 @@
 ## 持續待辦
 
 - Phase 4 前歷史成績沒有錯鍵資料，不回填。
-- 公開排行榜排除 `active=false` 尚未完成。
+- 公開排行榜排除 `active=false` 的本地修正已完成，尚待 Production 部署。
 - 舊版共用 `lessonProgress` 不自動認領給學生。
 - 正式作業速度／正確率仍主要由 client 計分。
 - 若未來要求更高可信度，再做 attempt token／server-side 核對。
