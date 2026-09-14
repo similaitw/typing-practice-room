@@ -100,11 +100,13 @@ module.exports = async function handler(req, res) {
     const threshold = Number.isInteger(requestedThreshold) && requestedThreshold >= 0 && requestedThreshold <= 100 ? requestedThreshold : 90;
     try {
       const rows = await sql`WITH best AS (
-        SELECT student_class, student_name, student_seat, speed, unit, accuracy, created_at,
-          ROW_NUMBER() OVER (PARTITION BY student_class, student_name, student_seat
-            ORDER BY speed DESC, accuracy DESC, created_at DESC, id) AS position
-        FROM typing_records WHERE language = ${language} AND accuracy >= ${threshold}
-          AND student_id IS NOT NULL AND student_class <> '' AND student_name <> '' AND student_seat <> ''
+        SELECT r.student_class, r.student_name, r.student_seat, r.speed, r.unit, r.accuracy, r.created_at,
+          ROW_NUMBER() OVER (PARTITION BY r.student_class, r.student_name, r.student_seat
+            ORDER BY r.speed DESC, r.accuracy DESC, r.created_at DESC, r.id) AS position
+        FROM typing_records r
+        JOIN typing_students s ON s.id = r.student_id AND s.active = true
+        WHERE r.language = ${language} AND r.accuracy >= ${threshold}
+          AND r.student_id IS NOT NULL AND r.student_class <> '' AND r.student_name <> '' AND r.student_seat <> ''
       ) SELECT student_class, student_name, student_seat, speed, unit, accuracy, created_at
         FROM best WHERE position = 1 ORDER BY speed DESC, accuracy DESC, created_at DESC,
           student_class, student_name, student_seat LIMIT 2000`;
