@@ -2,144 +2,115 @@
 
 > 本檔只維護目前可直接接手的功能基準；較早逐次紀錄保留在 Git 歷史。
 
-## 2026-09-14｜成績上傳修復
-
-- 正式站 `POST /api/records` 曾持續回傳 502：先遇到 `permission denied for schema public`，移除成績 API 的 runtime 建表後，確認另缺少 `typing_records.mistakes` 欄位。
-- Commit `8ab7534` 已部署：成績 API 使用既有資料表；前端保留待傳成績並顯示 HTTP 錯誤原因；公開排行榜在可見時每 15 秒刷新，回到分頁與恢復連線時也刷新。
-- 已在 production 執行 `ALTER TABLE public.typing_records ADD COLUMN IF NOT EXISTS mistakes jsonb`，未更動既有成績。
-- 50 項 Node 測試與 GitHub CI 通過。CI 改用 `node --test`，納入排行榜與上傳權限回歸測試。
-- 正式 API 以不列入排行榜的訪客測試成績確認 HTTP 201，並直接核對資料庫成績與錯鍵資料；驗證後已刪除該筆測試成績。
-- 使用者瀏覽器內原有待傳成績是否成功重送，仍待該瀏覽器確認。不可清除待傳佇列或瀏覽器資料。
-- 後續 schema 變更須以管理連線套用 SQL migration，成績 API 不再自動建表；其他 API 的 runtime schema 初始化尚未在本次修改。
-
-## 2026-09-09｜目前功能基準
+## 2026-09-14｜目前功能基準：簡化排行榜版
 
 - Production：`https://typing-practice-room.vercel.app`
 - Branch：`main`
 - 技術：HTML／CSS／Vanilla JS、Vercel Functions、Vercel Postgres／Neon。
-- Phase 1：雲端學生名單 ✅
-- Phase 2：教師派作業／學生「我的任務」／一次性學生啟用碼 ✅
-- Phase 3：教師完成度儀表板／課堂投影模式 ✅
-- Phase 4：英文錯鍵診斷／手指弱點分析 ✅
-- Phase 5：學生「我的弱鍵」／1、2 分鐘弱鍵特訓 ✅
-- Phase 6：學生課程進度雲端同步 ✅
-- Phase 7：教師班級／個人成長分析 ✅
-- Phase 8：教師統一報表／CSV／列印 PDF ✅
-- Phase 9：學生「我的紀錄」／輕量 SVG 趨勢圖 ✅
-- 原 Roadmap Phase 10「正向成就系統」與 Phase 11「班級挑戰」目前依使用者決定暫緩。
+- 使用者決定把教師端與排行榜大幅簡化，不再讓一般操作畫面載入錯鍵分析、弱鍵特訓、成長分析、報表、作業管理等進階模組。
+- 舊功能程式與資料表仍保留在 repository／database，沒有刪除歷史資料；只是目前 `teacher-auth.js` 不再載入那些 optional modules。
 
-## Phase 9｜學生「我的紀錄」與學習趨勢
+## 現行學生流程
 
-### 新增
+1. 進入「打字測速」。
+2. 只填寫：班級、姓名、座號。
+3. 按「登錄排行榜」。
+4. `POST /api/ranking-register` 會建立或沿用雲端 `typing_students` 身分。
+5. 完成測速後，成績照既有 `/api/records` 寫入資料庫並更新排行榜。
 
-- `lib/student-history.js`
-  - 計算學生 first／recent／best、測驗次數、平均正確率、絕對進步與百分比成長。
-  - 趨勢只取目前篩選條件最近 20 筆。
-  - 英文可聚合既有 `mistakes`。
-  - 至少 4 筆英文紀錄時，按時間分前半／後半，用 `錯按事件 ÷ typedLength × 100` 比較「每 100 個已輸入字元的錯按事件」。
-  - 錯按事件包含已用 Backspace 修正的過程錯按，不等同最終文字錯字率。
+### 排行榜身分規則
 
-- `api/my-records.js`
-  - `GET` only。
-  - 只認目前 HttpOnly student session；不接受 `studentId` 作為查詢身分。
-  - 沒有 student cookie 時，在 schema／records 查詢前直接回 401。
-  - 支援：`language=en|zh`、`duration=15|30|60|120`、`source=builtin|all`、`threshold=0..100`。
-  - 預設：英文、60 秒、標準題庫、最低正確率 0%。
-  - 只查目前 session student 的 `typing_records`，最多 10,000 筆；若達上限回 `truncated=true`。
-  - 最近紀錄會附 assignment title（若是正式作業）。
-  - 中文不回傳實體鍵位弱鍵趨勢。
+- 班級、姓名、座號皆必填。
+- 座號限制 1–999，會補成至少兩位數，例如 `7` → `07`。
+- 相同班級＋姓名＋座號沿用同一個雲端學生 ID。
+- 若教師已將該學生設為 `active=false`，學生不可自行重新啟用，必須由教師端恢復。
+- 公開排行榜仍只列 `typing_students.active=true` 的學生；歷史成績不刪除。
 
+## 現行排行榜 UI
+
+`simple-ranking.js` 會在載入後取代原本複雜排行榜畫面。
+
+公開排行榜與教師排行榜都只保留：
+
+- 語言：英文 WPM／中文 CPM。
+- 顯示名次：前 10／20／30／50／100 名。
+- 姓名查詢：輸入姓名後只回報目前名次；若同名，會列出各班級／座號的名次。
+- 排行列只顯示：名次、班級／姓名／座號、速度。
+- 不顯示日期、錯鍵、弱鍵、成長曲線、測驗明細等資訊。
+- 排名規則仍沿用既有資料庫邏輯：個人最佳速度、最低正確率 90%，同速再比較正確率與時間。
+
+## 現行教師端
+
+教師端目前只保留三個主要頁面：
+
+1. 學生名單
+2. 排行榜
+3. 備份與資料
+
+`teacher-auth.js` 現在只載入：
+
+- `cloud-students.js`
+- `simple-ranking.js`
+
+以下舊模組仍留在 repo，但目前不自動載入：
+
+- `assignments.js`
+- `assignment-dashboard.js`
+- `mistake-analytics.js`
+- `weak-key-core.js`
+- `weak-key-practice.js`
+- `cloud-progress.js`
+- `growth-analytics.js`
+- `report.js`
 - `my-records.js`
-  - 首頁新增「我的紀錄」。
-  - 未登入時只顯示登入提示；有效 student session 才讀私人紀錄。
-  - 可切英文／中文、15／30／60／120 秒、標準題庫／全部練習、最低正確率全部／80／90／95%。
-  - 摘要：測驗次數、第一次、最近一次、個人最佳、平均正確率、成長值與成長率。
-  - 使用原生 SVG 畫最近 20 筆折線趨勢，不加入大型 chart library。
-  - 最近紀錄顯示速度、正確率、來源／作業與時間。
-  - 英文顯示弱鍵與前半／後半錯按率；用「每 100 字元錯按事件」正規化。
-  - 完成新測速後會延遲刷新；學生啟用碼登入／登出、回到分頁時也會重新確認。
 
-- `teacher-auth.js`
-  - 現有 optional module 載入鏈最後加入 `my-records.js`。
-  - `report.js` 成功或失敗後都會繼續嘗試載入學生紀錄模組；Phase 9 失敗不阻斷既有功能。
+除非使用者明確要求，不要自行把這些進階頁面重新加回教師 UI。
 
-### 驗證
+## 2026-09-14 主要變更
 
-- 新增 `tests/my-records.test.cjs`：
-  - first／recent／best、進步與百分比。
-  - 趨勢最近 20 筆。
-  - 英文錯按事件／100 字元、前後半 reduction。
-  - `language`／`duration`／`source`／`threshold` parser。
-  - query 帶其他 `studentId` 不會改變 server session 身分規則。
-  - 沒有 student cookie 時直接 401。
-- `.github/workflows/test.yml` 已加入：
-  - `tests/my-records.test.cjs`
-  - `my-records.js`
-  - `api/my-records.js`
-  - `lib/student-history.js`
-- GitHub Actions run `34285275199`：Node tests、Syntax checks 全部 success。
-- Vercel 對 Phase 9 CI commit `ddbbbd6` 回報 deployment `success`。
-- README 已更新 Phase 1–9、Phase 9 安全規則與後續暫緩項目。
+- `8ab7534`：修復資料庫 schema 權限不足時的成績上傳。
+- `4e691ed`：公開排行榜排除已停用學生。
+- `b48b534`：更新排行榜測試並通過 CI。
+- `72db7f8`：新增簡單排行榜公開登錄 API。
+- `0138bfc`：新增 `simple-ranking.js`，簡化公開／教師排行榜。
+- `570d75e`：教師端只載入雲端名單與簡化排行榜。
+- `9d0b048`：新增排行榜登錄測試。
+- `7c518f1`：CI 加入新檔案 syntax checks。
 
-### Phase 9 主要 commits
+## 驗證
 
-- `0403b6c` student history helper
-- `cd237d3` private student history API
-- `6db97fe` student My Records UI
-- `bbfc7c6` module loading
-- `382d1ac` Phase 9 tests
-- `ddbbbd6` Phase 9 CI
-- `11a33d7` README
-
-## Phase 1–8 接手摘要
-
-- Phase 1：`typing_students` 為教師雲端名單；停用不刪歷史成績。
-- Phase 2：作業、班級 targets、一次性啟用碼、8 小時學生 session；正式作業由 server 核對 session／班級／語言／秒數。
-- Phase 3：完成度與課堂投影；投影只顯示座號。
-- Phase 4：`typing_records.mistakes jsonb`；只保存英文聚合錯鍵，不保存完整文章。
-- Phase 5：學生私有「我的弱鍵」與 1／2 分鐘補強，不使用 AI API。
-- Phase 6：`typing_progress` 與每位學生本機快取；跨裝置恢復課程進度。
-- Phase 7：教師成長分析；英文／中文、秒數、來源、門檻、日期分開，班級平均不重複加權。
-- Phase 8：教師統一報表，整合作業狀態、成長、常錯鍵；CSV 與瀏覽器列印 PDF。
+- GitHub Actions run `34805327198`（run #106）：`success`。
+- Vercel 對 commit `7c518f18f4dd65cfee209e316c01cb70c8838030`：deployment `success`。
+- `simple-ranking.js`、`api/ranking-register.js` 均納入 syntax check。
+- `tests/ranking-register.test.cjs` 已納入 `node --test`。
 
 ## 尚未人工 Production E2E
 
-仍未使用真實教師密碼／學生啟用碼，因此以下不能標成人工通過：
+仍建議使用真實資料人工驗證：
 
-1. 學生正式兌換啟用碼。
-2. 「我的紀錄」只出現該學生自己的資料。
-3. 英文 60 秒標準題庫在不同裝置登入後可看到相同趨勢。
-4. 切換中文、15／30／60／120 秒與來源／最低正確率，確認結果正確分離。
-5. 完成新測速後，首頁趨勢與最近紀錄自動刷新。
-6. 故意錯按並 Backspace 修正，累積至少 4 筆後確認每 100 字元錯按率前後半計算合理。
-7. 共用電腦登出 A、登入 B，確認「我的紀錄」不殘留 A 的私人資料。
+1. 新學生輸入班級／姓名／座號後可建立雲端排行榜身分。
+2. 同一學生第二次使用相同資料會沿用相同 ID，不重複建立。
+3. 完成測速後可在排行榜看到成績。
+4. 公開排行榜可切前 10／20／30／50／100 名。
+5. 姓名查詢可找到顯示範圍外（例如第 37 名）的目前名次。
+6. 教師停用學生後，該學生不再出現在排行榜，且不能自行重新登錄啟用。
+7. 教師端重新整理後只看到「學生名單／排行榜／備份與資料」，不再出現進階分析頁籤。
 
-自動測試與部署已通過，但不可宣稱上述真實資料人工 E2E 已完成。
+自動測試與部署已通過，但上述真實 Production 操作尚不可宣稱人工 E2E 通過。
 
-## 使用者目前決定暫緩
+## 後續原則
 
-- 徽章／正向成就系統。
-- 班級挑戰／遊戲化共同目標。
-
-不要自動往 Phase 10／11 開發，除非使用者重新要求。
-
-## 下一步建議（非遊戲化）
-
-若使用者說「繼續」且沒有指定方向，優先從技術／教學實用待辦選擇：
-
-1. **部署公開排行榜修正**：本地已讓 `active=false` 不再出現在公開排行榜，但仍需部署到 Production；歷史成績保留。
-2. Production 真實 E2E：教師→學生→作業→錯鍵→弱鍵→課程進度→我的紀錄→報表完整流程。
-3. 安全／可信度：若需求提高，再做 attempt token／server-side 核對；目前系統不是正式考試防作弊工具。
-4. 可維護性：逐步抽共用 teacher/student session 驗證與重複 filter parser，但不要改框架。
-
-## 持續待辦
-
-- Phase 4 前歷史成績沒有錯鍵資料，不回填。
-- 公開排行榜排除 `active=false` 的本地修正已完成，尚待 Production 部署。
-- 舊版共用 `lessonProgress` 不自動認領給學生。
-- 正式作業速度／正確率仍主要由 client 計分。
-- 若未來要求更高可信度，再做 attempt token／server-side 核對。
+- 目前產品方向是「簡單、課堂可直接用」，不要優先恢復遊戲化或複雜分析。
+- 不刪除舊資料與舊模組，除非使用者明確要求清理。
+- 若要再擴充排行榜，優先考慮：班級篩選、教師設定全站預設顯示名次、姓名＋班級查詢。
+- 若未來要求正式考試可信度，再另做 server-side attempt token／成績核對；目前仍是練習工具，不是防作弊考試系統。
 
 ## 歷史
 
-Phase 8 以前完整交接可從 Git commit `a74be59`、`33fb533`、`a4efaa4`、`ca690a0`、`fd6acea`、`e7dc26d` 與更早的 `AGENT_HANDOFF.md` 歷史追溯。
+Phase 1–9 舊版完整功能可從 Git 歷史追溯，重要 handoff commits 包含：`79f990e`、`a74be59`、`33fb533`、`a4efaa4`、`ca690a0`、`fd6acea`、`e7dc26d`。
+
+## 2026-09-15｜教師端精簡
+
+- 移除名單、備份與其他教師管理分頁，保留成績排行、篩選、CSV 與資料編輯／刪除。
+- PATCH／DELETE /api/records 驗證教師登入與同源，變更寫入資料庫。
+- 整合遠端簡易公開排行榜、姓名搜尋與雲端登錄；不再載入教師名單模組。

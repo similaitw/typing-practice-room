@@ -27,6 +27,7 @@ jobs:
           node --check data.js
           node --check teacher-auth.js
           node --check cloud-students.js
+          node --check simple-ranking.js
           node --check assignments.js
           node --check assignment-dashboard.js
           node --check mistake-analytics.js
@@ -38,6 +39,7 @@ jobs:
           node --check my-records.js
           node --check api/records.js
           node --check api/students.js
+          node --check api/ranking-register.js
           node --check api/assignments.js
           node --check api/assignment-dashboard.js
           node --check api/student-access.js

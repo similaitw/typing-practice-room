@@ -2,7 +2,7 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const vm=require('node:vm');
 const fs=require('node:fs');
-test('public leaderboard uses database identity ranking and returns only display fields',async()=>{
+test('public leaderboard uses active roster identity ranking and returns only display fields',async()=>{
  let statement='', values;
  const context=vm.createContext({module:{exports:{}},require:name=>{
   if(name==='node:crypto')return require(name);

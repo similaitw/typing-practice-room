@@ -94,7 +94,7 @@ module.exports = async function handler(req, res) {
   }
   if (!['GET','PATCH','DELETE'].includes(req.method)) {res.setHeader('Allow', 'GET, POST, PATCH, DELETE'); return res.status(405).json({error: '不支援此操作。'});}
   const publicQuery = new URL(req.url, `https://${req.headers.host}`).searchParams;
-  if (publicQuery.get('view') === 'leaderboard') {
+  if (req.method === 'GET' && publicQuery.get('view') === 'leaderboard') {
     const language = publicQuery.get('language') === 'zh' ? 'zh' : 'en';
     const requestedThreshold = Number(publicQuery.get('threshold') ?? 90);
     const threshold = Number.isInteger(requestedThreshold) && requestedThreshold >= 0 && requestedThreshold <= 100 ? requestedThreshold : 90;

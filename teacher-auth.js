@@ -99,20 +99,16 @@ document.addEventListener('visibilitychange',() => {
   if (!document.hidden && document.querySelector('#teacher').classList.contains('active')) openTeacher();
 });
 
-// app.js is parsed after this file. Load optional cloud modules only after its global helpers exist.
+// Load public ranking tools; teacher record management is provided by app.js.
 window.addEventListener('load', () => {
-  const loadMyRecords = () => {
-    if (document.querySelector('script[data-my-records]')) return;
+  const loadSimpleRanking = () => {
+    if (document.querySelector('script[data-simple-ranking]')) return;
     const script = document.createElement('script');
-    script.src = 'my-records.js';
-    script.dataset.myRecords = 'true';
+    script.src = 'simple-ranking.js';
+    script.dataset.simpleRanking = 'true';
     script.async = false;
-    script.onerror = () => console.warn('my-records.js could not be loaded; existing student and teacher tools remain available.');
+    script.onerror = () => console.warn('simple-ranking.js could not be loaded; base typing practice remains available.');
     document.body.append(script);
   };
-  const script = document.createElement('script');
-  script.src = 'assignments.js';
-  script.onload = loadMyRecords;
-  script.onerror = loadMyRecords;
-  document.body.append(script);
+  loadSimpleRanking();
 });
