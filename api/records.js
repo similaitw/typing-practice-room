@@ -3,7 +3,6 @@
 const crypto = require('node:crypto');
 const {neon} = require('@neondatabase/serverless');
 const {readCredentials} = require('../lib/teacher-credentials');
-const {ensureAssignmentSchema} = require('../lib/typing-schema');
 const {readStudentSession, sameOrigin} = require('../lib/student-session');
 const {cleanMistakes} = require('../lib/mistake-analysis');
 const COOKIE = '__Host-typing-teacher';
@@ -67,7 +66,6 @@ module.exports = async function handler(req, res) {
     const record = cleanRecord(req.body);
     if (!record) return res.status(400).json({error: '成績資料格式不正確。'});
     try {
-      await ensureAssignmentSchema(sql);
       if (record.assignmentId) {
         const studentSession = await readStudentSession(sql, req.headers.cookie);
         if (!studentSession) return res.status(401).json({error:'正式作業需要先使用學生啟用碼登入。'});
@@ -127,7 +125,6 @@ module.exports = async function handler(req, res) {
   const from = query.get('from') && Number.isFinite(Date.parse(query.get('from'))) ? new Date(query.get('from')).toISOString() : null;
   const to = query.get('to') && Number.isFinite(Date.parse(query.get('to'))) ? new Date(query.get('to')).toISOString() : null;
   try {
-    await ensureAssignmentSchema(sql);
     const rows = await sql`SELECT * FROM typing_records
       WHERE (${studentId}::text IS NULL OR student_id = ${studentId})
         AND (${language}::text IS NULL OR language = ${language})

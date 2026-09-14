@@ -19,7 +19,7 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Node tests
-        run: node --test tests/core.test.cjs tests/teacher-auth.test.cjs tests/records-auth.test.cjs tests/students-api.test.cjs tests/assignments.test.cjs tests/assignment-dashboard.test.cjs tests/mistake-analysis.test.cjs tests/weak-key-practice.test.cjs tests/progress.test.cjs tests/growth-analytics.test.cjs tests/report.test.cjs tests/my-records.test.cjs
+        run: node --test
       - name: Syntax checks
         run: |
           node --check app.js
