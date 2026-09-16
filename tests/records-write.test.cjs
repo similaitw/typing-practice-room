@@ -27,6 +27,14 @@ test('record uploads use existing tables without requiring schema creation privi
   assert.equal(statements.length, 1);
   assert.match(statements[0], /INSERT INTO typing_records/);
   assert.equal(res.body.saved, true);
+  for (const [correctChars, expectedStatus] of [[0,422],[179,422],[180,201],[200,201]]) {
+    statements.length = 0;
+    await context.module.exports({method:'POST', headers:{host:'test'}, body:{...body,
+      source:'custom', correctChars, errors:200-correctChars, typedLength:200, targetLength:200,
+      accuracy:100}}, res);
+    assert.equal(res.code, expectedStatus, 'use character counts even if reported accuracy is forged');
+    assert.equal(statements.length, expectedStatus === 201 ? 1 : 0);
+  }
   statements.length = 0;
   await context.module.exports({method:'POST', headers:{host:'test'}, body:{...body, assignmentId:'assignment'}}, res);
   assert.equal(res.code, 401);

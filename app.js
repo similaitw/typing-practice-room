@@ -64,6 +64,7 @@ async function flushPendingRecords() {
   try {
     while (pendingRecords.length) {
       const record = pendingRecords[0];
+      if (!C.canSaveRecord(record)) {pendingRecords.shift(); savePending(); continue;}
       const response = await fetch('/api/records', {method:'POST', headers:{'Content-Type':'application/json'}, credentials:'same-origin', body:JSON.stringify(record), signal:AbortSignal.timeout(15000)});
       if (!response.ok) {
         const detail = await response.json().catch(() => ({}));
@@ -72,7 +73,7 @@ async function flushPendingRecords() {
       recordSyncError = '';
       pendingRecords.shift(); savePending(); saved = true;
     }
-    toast('成績已存入資料庫。');
+    if (saved) toast('成績已存入資料庫。');
   } catch (error) {
     recordSyncError = error.message?.startsWith('上傳失敗') ? error.message : '連線中斷或逾時，稍後自動重試。';
     savePending(); toast(recordSyncError);
@@ -319,12 +320,13 @@ function finishTest(measured) {
     source:test.lang === 'custom' ? 'custom' : 'builtin',duration:test.duration,elapsedSeconds:Number(m.elapsed.toFixed(3)),speed:m.speed,
     unit:test.language === 'zh' ? 'CPM' : 'WPM',accuracy:m.accuracy,correctChars:m.correct,errors:m.errors,typedLength:m.typed,
     targetLength:C.chars(test.text).length,createdAt:new Date().toISOString()};
-  if (m.typed) {data.testRecords.push(record); save(); stats(); publishRecord(record);}
+  const shouldSave = C.canSaveRecord(record);
+  if (shouldSave) {data.testRecords.push(record); save(); stats(); publishRecord(record);}
   $('#player-ranking-language').value = test.language;
   renderPlayerRanking();
   $('#test-state').textContent = '測驗完成';
   const panel = $('#result-panel'); panel.hidden = false;
-  panel.innerHTML = `<h2 tabindex="-1">${m.accuracy >= 90 ? '穩穩完成！' : '每次練習都算數。'}</h2><p>${m.typed ? escapeHtml(record.studentLabel) + ' · 已記錄本次結果' : '沒有輸入字元，本次不儲存成績'}</p><div class="result-stats"><div><strong>${m.speed}</strong><span>${record.unit}</span></div><div><strong>${m.accuracy}%</strong><span>正確率</span></div><div><strong>${m.errors}</strong><span>錯字</span></div></div><button id="again" class="btn">再測一次 ↻</button>`;
+  panel.innerHTML = `<h2 tabindex="-1">${m.accuracy >= 90 ? '穩穩完成！' : '每次練習都算數。'}</h2><p>${shouldSave ? escapeHtml(record.studentLabel) + ' · 已記錄本次結果' : m.typed ? '自訂文章正確率未達 90%，本次不儲存或上傳成績' : '沒有輸入字元，本次不儲存成績'}</p><div class="result-stats"><div><strong>${m.speed}</strong><span>${record.unit}</span></div><div><strong>${m.accuracy}%</strong><span>正確率</span></div><div><strong>${m.errors}</strong><span>錯字</span></div></div><button id="again" class="btn">再測一次 ↻</button>`;
   $('#again').onclick = () => {resetTest(); $('#test-input').focus();};
   const rankingButton = document.createElement('button');
   rankingButton.className = 'btn'; rankingButton.textContent = '查看排行榜 ↓';
@@ -455,14 +457,37 @@ let teacherRankingRequest = 0;
 async function renderTeacherRanking() {
   const request = ++teacherRankingRequest;
   try {
-    const response = await fetch(`/api/records?view=leaderboard&language=${$('#leaderboard-language').value}&threshold=90`,{cache:'no-store',signal:AbortSignal.timeout(15000)});
+    const response = await fetch(`/api/records?view=leaderboard&language=${$('#leaderboard-language').value}&threshold=90&manage=1`,{cache:'no-store',signal:AbortSignal.timeout(15000)});
     if (!response.ok) throw Error();
     const rows = await response.json();
     if (request !== teacherRankingRequest || !teacherIsActive()) return;
-    $('#leaderboard').innerHTML = rows.length ? rows.map((r,i) => `<div class="rank"><span class="rank-no">${i + 1}</span><span class="rank-name"><strong>${escapeHtml([r.studentClass,r.studentName,r.studentSeat ? r.studentSeat + '號' : ''].filter(Boolean).join(' ｜ '))}</strong><small>${formatDate(r.createdAt)}</small></span><span class="rank-speed"><strong>${r.speed}</strong><small>${r.unit}</small></span><span class="rank-accuracy">${r.accuracy}%</span></div>`).join('') : '<div class="empty">目前沒有符合門檻的成績。</div>';
+    $('#leaderboard').innerHTML = rows.length ? rows.map((r,i) => `<div class="rank"><span class="rank-no">${i + 1}</span><span class="rank-name"><strong>${escapeHtml([r.studentClass,r.studentName,r.studentSeat ? r.studentSeat + '號' : ''].filter(Boolean).join(' ｜ '))}</strong><small>${formatDate(r.createdAt)}</small></span><span class="rank-speed"><strong>${r.speed}</strong><small>${r.unit}</small></span><span class="rank-accuracy">${r.accuracy}%</span><span class="rank-actions"><button type="button" data-rank-edit="${i}">編輯成績</button><button type="button" data-rank-delete="${i}">刪除成績</button></span></div>`).join('') : '<div class="empty">目前沒有符合門檻的成績。</div>';
+    $$('[data-rank-edit]').forEach(button => button.onclick = () => editRecord(rows[Number(button.dataset.rankEdit)]));
+    $$('[data-rank-delete]').forEach(button => button.onclick = () => deleteRecord(rows[Number(button.dataset.rankDelete)]));
+    protectTeacherActions();
   } catch {
     if (request === teacherRankingRequest) $('#leaderboard').innerHTML = '<div class="empty">排行榜同步失敗，請重新整理。</div>';
   }
+}
+async function editRecord(record) {
+  const next = {id:record.id};
+  for (const [key,label] of [['studentClass','班級'],['studentName','姓名'],['studentSeat','座號'],['speed','速度'],['accuracy','正確率']]) {
+    const value = prompt(`修改${label}`,record[key] ?? '');
+    if (value === null) return;
+    if (['speed','accuracy'].includes(key)) {
+      const number = Number(value);
+      if (!value.trim() || !Number.isInteger(number) || number < 0 || number > (key === 'accuracy' ? 100 : 100000)) {
+        toast(key === 'accuracy' ? '正確率需為 0–100 的整數。' : '速度需為 0–100000 的整數。');
+        return;
+      }
+      next[key] = number;
+    } else next[key] = value.trim();
+  }
+  await changeRecord('PATCH',next);
+}
+async function deleteRecord(record) {
+  const label = record.studentLabel || [record.studentClass,record.studentName,record.studentSeat].filter(Boolean).join(' ｜ ');
+  if (confirm(`刪除 ${label} 這筆 ${record.speed} ${record.unit} 成績？無法復原；若還有其他合格成績，排行榜會顯示下一筆最佳成績。`)) await changeRecord('DELETE',{id:record.id});
 }
 async function changeRecord(method, body) {
   try {
@@ -490,19 +515,8 @@ function renderScores() {
   $('#summary').innerHTML = [['班級人數',data.students.length],['已參與學生',new Set(classroom.map(r => r.studentId)).size],['測驗次數（含訪客）',records.length],['班級平均 WPM',avg(classroom.filter(r => r.language === 'en'),'speed')],['班級平均 CPM',avg(classroom.filter(r => r.language === 'zh'),'speed')],['班級平均正確率',avg(classroom,'accuracy') + '%']].map(([label,value]) => `<div><span>${label}</span><strong>${value}</strong></div>`).join('');
   renderTeacherRanking();
   $('#record-table').innerHTML = records.length ? `<div class="record-wrap"><table class="record"><caption>測驗明細，依日期由新到舊，共 ${records.length} 筆</caption><thead><tr><th>學生</th><th>語言</th><th>速度</th><th>正確率</th><th>設定／實際秒數</th><th>日期</th><th>操作</th></tr></thead><tbody>${records.map((r,i) => `<tr><td>${escapeHtml(r.studentLabel)}</td><td>${r.language === 'zh' ? '中文' : '英文'}</td><td>${r.speed} ${r.unit}</td><td>${r.accuracy}%</td><td>${r.duration} / ${r.elapsedSeconds}</td><td>${formatDate(r.createdAt)}</td><td><button data-edit-record="${i}">編輯</button> <button class="table-delete" data-record="${i}">刪除</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">沒有符合篩選的測驗紀錄。</div>';
-  $$('[data-edit-record]').forEach(b => b.onclick = async () => {
-    const r = records[Number(b.dataset.editRecord)], next = {id:r.id};
-    for (const [key,label] of [['studentClass','班級'],['studentName','姓名'],['studentSeat','座號'],['speed','速度'],['accuracy','正確率']]) {
-      const value = prompt(`修改${label}`,r[key] ?? '');
-      if (value === null) return;
-      next[key] = ['speed','accuracy'].includes(key) ? Number(value) : value.trim();
-    }
-    await changeRecord('PATCH',next);
-  });
-  $$('[data-record]').forEach(b => b.onclick = async () => {
-    const r = records[Number(b.dataset.record)];
-    if (confirm(`刪除 ${r.studentLabel} 這筆測驗紀錄？資料庫也會刪除，無法復原。`)) await changeRecord('DELETE',{id:r.id});
-  });
+  $$('[data-edit-record]').forEach(b => b.onclick = () => editRecord(records[Number(b.dataset.editRecord)]));
+  $$('[data-record]').forEach(b => b.onclick = () => deleteRecord(records[Number(b.dataset.record)]));
   const studentRows = data.students.filter(s => !$('#filter-student').value || s.id === $('#filter-student').value).map(s => {
     const own = records.filter(r => r.studentId === s.id);
     const best = language => {const r = own.filter(r => r.language === language).sort(C.compareScores)[0]; return r ? `${r.speed} ${r.unit}` : '--';};

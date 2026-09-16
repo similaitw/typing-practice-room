@@ -55,3 +55,11 @@ test('class, name and seat survive backup round-trip and optional CSV class colu
     [{className:'701',name:'同名學生',seat:'01'},{className:'702',name:'同名學生',seat:'01'}]);
   assert.throws(()=>C.validateData({...data,students:[{...withClass,className:'a'.repeat(41)}]}));
 });
+
+
+test('custom records require actual 90 percent accuracy before saving', () => {
+  for (const [correctChars, typedLength, expected] of [[0,10,false],[89,100,false],[179,200,false],[90,100,true],[10,10,true],[0,0,false]]) {
+    assert.equal(C.canSaveRecord({...record, source:'custom', correctChars, typedLength}), expected);
+  }
+  assert.equal(C.canSaveRecord({...record, correctChars:0, typedLength:10}), true);
+});

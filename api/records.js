@@ -65,6 +65,9 @@ module.exports = async function handler(req, res) {
     if (!sameOrigin(req)) return res.status(403).json({error:'來源驗證失敗。'});
     const record = cleanRecord(req.body);
     if (!record) return res.status(400).json({error: '成績資料格式不正確。'});
+    if (record.source === 'custom' && record.correctChars / record.typedLength < 0.9) {
+      return res.status(422).json({error:'自訂文章正確率未達 90%，不儲存成績。'});
+    }
     try {
       if (record.assignmentId) {
         const studentSession = await readStudentSession(sql, req.headers.cookie);
@@ -95,22 +98,29 @@ module.exports = async function handler(req, res) {
   if (!['GET','PATCH','DELETE'].includes(req.method)) {res.setHeader('Allow', 'GET, POST, PATCH, DELETE'); return res.status(405).json({error: '不支援此操作。'});}
   const publicQuery = new URL(req.url, `https://${req.headers.host}`).searchParams;
   if (req.method === 'GET' && publicQuery.get('view') === 'leaderboard') {
+    const manage = publicQuery.get('manage') === '1';
+    if (manage) {
+      let credentials;
+      try {credentials = await readCredentials();}
+      catch {return res.status(503).json({error:'目前無法讀取教師登入設定，請稍後再試。'});}
+      if (!sessionValid(req.headers.cookie, settings.secret, credentials.sessionKey)) return res.status(401).json({error:'請先登入教師端。'});
+    }
     const language = publicQuery.get('language') === 'zh' ? 'zh' : 'en';
     const requestedThreshold = Number(publicQuery.get('threshold') ?? 90);
     const threshold = Number.isInteger(requestedThreshold) && requestedThreshold >= 0 && requestedThreshold <= 100 ? requestedThreshold : 90;
     try {
       const rows = await sql`WITH best AS (
-        SELECT r.student_class, r.student_name, r.student_seat, r.speed, r.unit, r.accuracy, r.created_at,
+        SELECT r.id, r.student_class, r.student_name, r.student_seat, r.speed, r.unit, r.accuracy, r.created_at,
           ROW_NUMBER() OVER (PARTITION BY r.student_class, r.student_name, r.student_seat
             ORDER BY r.speed DESC, r.accuracy DESC, r.created_at DESC, r.id) AS position
         FROM typing_records r
         JOIN typing_students s ON s.id = r.student_id AND s.active = true
         WHERE r.language = ${language} AND r.accuracy >= ${threshold}
           AND r.student_id IS NOT NULL AND r.student_class <> '' AND r.student_name <> '' AND r.student_seat <> ''
-      ) SELECT student_class, student_name, student_seat, speed, unit, accuracy, created_at
+      ) SELECT id, student_class, student_name, student_seat, speed, unit, accuracy, created_at
         FROM best WHERE position = 1 ORDER BY speed DESC, accuracy DESC, created_at DESC,
           student_class, student_name, student_seat LIMIT 2000`;
-      return res.status(200).json(rows.map(row => ({studentClass:row.student_class,
+      return res.status(200).json(rows.map(row => ({...(manage ? {id:row.id} : {}), studentClass:row.student_class,
         studentName:row.student_name, studentSeat:row.student_seat,
         studentLabel:[row.student_class,row.student_name,row.student_seat+'號'].join(' ｜ '),
         speed:row.speed,unit:row.unit,accuracy:row.accuracy,createdAt:row.created_at})));

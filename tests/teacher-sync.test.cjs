@@ -3,16 +3,16 @@ const assert=require('node:assert/strict');
 const vm=require('node:vm');
 const fs=require('node:fs');
 const source=fs.readFileSync('app.js','utf8');
-test('teacher ranking reads the public ranking API and ignores stale responses',async()=>{
+test('teacher ranking reads the authenticated management ranking API and ignores stale responses',async()=>{
  const nodes={'#leaderboard-language':{value:'en'},'#leaderboard':{innerHTML:''}};
  const pending=[];
- const context=vm.createContext({$:id=>nodes[id],teacherIsActive:()=>true,escapeHtml:String,formatDate:String,AbortSignal,fetch:url=>new Promise(resolve=>pending.push({url,resolve}))});
+ const context=vm.createContext({$:id=>nodes[id],teacherIsActive:()=>true,$$:()=>[],protectTeacherActions:()=>{},escapeHtml:String,formatDate:String,AbortSignal,fetch:url=>new Promise(resolve=>pending.push({url,resolve}))});
  vm.runInContext(source.slice(source.indexOf('let teacherRankingRequest ='),source.indexOf('async function changeRecord')),context);
  const first=context.renderTeacherRanking();
  nodes['#leaderboard-language'].value='zh';
  const second=context.renderTeacherRanking();
- assert.equal(pending[0].url,'/api/records?view=leaderboard&language=en&threshold=90');
- assert.equal(pending[1].url,'/api/records?view=leaderboard&language=zh&threshold=90');
+ assert.equal(pending[0].url,'/api/records?view=leaderboard&language=en&threshold=90&manage=1');
+ assert.equal(pending[1].url,'/api/records?view=leaderboard&language=zh&threshold=90&manage=1');
  pending[1].resolve({ok:true,json:async()=>[{studentClass:'701',studentName:'最新',studentSeat:'01',speed:80,unit:'CPM',accuracy:95,createdAt:'2026-09-15'}]});
  await second;
  pending[0].resolve({ok:true,json:async()=>[]});await first;
@@ -23,4 +23,21 @@ test('teacher details exclude browser-only pending records',()=>{
  vm.runInContext(source.slice(source.indexOf('function filteredRecords()'),source.indexOf('function renderScores()')),context);
  assert.equal(context.filteredRecords().length,1);
  assert.equal(context.filteredRecords()[0].id,'cloud');
+});
+
+
+test('ranking edit and delete target the selected record, validate input and honor cancellation',async()=>{
+ const calls=[], prompts=[];
+ let confirmation=false;
+ const context=vm.createContext({prompt:()=>prompts.shift(),confirm:()=>confirmation,toast:()=>{},changeRecord:async(method,body)=>calls.push({method,body})});
+ vm.runInContext(source.slice(source.indexOf('async function editRecord'),source.indexOf('async function changeRecord')),context);
+ const record={id:'ranked-best',studentClass:'701',studentName:'同學',studentSeat:'01',speed:90,accuracy:95,unit:'WPM'};
+ prompts.push('701','同學','01','80','96');
+ await context.editRecord(record);
+ assert.equal(calls[0].method,'PATCH');assert.equal(calls[0].body.id,'ranked-best');assert.equal(calls[0].body.speed,80);
+ prompts.push(null);await context.editRecord(record);assert.equal(calls.length,1);
+ prompts.push('701','同學','01','');await context.editRecord(record);assert.equal(calls.length,1);
+ await context.deleteRecord(record);assert.equal(calls.length,1);
+ confirmation=true;await context.deleteRecord(record);
+ assert.equal(calls[1].method,'DELETE');assert.equal(calls[1].body.id,'ranked-best');
 });

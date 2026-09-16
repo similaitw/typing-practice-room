@@ -13,6 +13,8 @@ const TypingCore = (() => {
       speed: Math.round(correct / (language === 'en' ? 5 : 1) / (elapsed / 60)),
       elapsed, progress: Math.min(100, Math.round(typed.length / Math.max(1, expected.length) * 100))};
   }
+  const canSaveRecord = record => record.typedLength > 0 &&
+    (record.source !== 'custom' || record.correctChars / record.typedLength >= 0.9);
   const languageOf = text => /[\p{Script=Han}\p{Script=Bopomofo}]/u.test(text) ? 'zh' : 'en';
   const compareScores = (a, b) => b.speed - a.speed || b.accuracy - a.accuracy || b.createdAt.localeCompare(a.createdAt);
   function rank(records, language, threshold, students) {
@@ -115,5 +117,5 @@ const TypingCore = (() => {
     if (Number.isInteger(p.settings?.lessonLength) && p.settings.lessonLength >= 50 && p.settings.lessonLength <= 2000) result.settings.lessonLength = p.settings.lessonLength;
     return result;
   }
-  return {emptyData, chars, measure, languageOf, compareScores, rank, parseCSV, rosterCSV, csvCell, validateData};
+  return {emptyData, chars, measure, canSaveRecord, languageOf, compareScores, rank, parseCSV, rosterCSV, csvCell, validateData};
 })();
