@@ -11,8 +11,9 @@ const catalog = require('../lib/lesson-catalog.js');
 const response = () => ({headers:{},setHeader(k,v){this.headers[k]=v;},status(code){this.code=code;return this;},json(body){this.body=body;return this;}});
 
 test('lesson catalog contains all current English and Chinese lesson ids',()=>{
-  assert.equal(Object.keys(catalog.LESSON_CATALOG).length,15);
+  assert.equal(Object.keys(catalog.LESSON_CATALOG).length,16);
   assert.equal(catalog.lessonLanguage('home'),'en');
+  assert.equal(catalog.lessonLanguage('alphabet'),'en');
   assert.equal(catalog.lessonLanguage('symbols'),'en');
   assert.equal(catalog.lessonLanguage('zh-home'),'zh');
   assert.equal(catalog.lessonLanguage('zh-long'),'zh');

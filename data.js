@@ -1,5 +1,6 @@
 const LESSONS=[
 {id:'home',group:'en',title:'基準鍵',sub:'Home row',desc:'讓左右手回到鍵盤的家。練習 ASDF 與 JKL; 的穩定節奏。',keys:'A S D F   J K L ;',fingers:'左手小指至食指 ｜ 右手食指至小指',text:'asdf jkl; fjfj dkdk slsl a; a; fj dk sl',goal:'不用看鍵盤，連續輸入 30 個字元'},
+{id:'alphabet',group:'en',fixedText:true,title:'連續 26 個英文字母',sub:'Alphabet A–Z',desc:'依序連續輸入小寫 a 到 z，中間不加空格。跟著亮起的鍵盤按鍵與指法提示，按完後讓手指回到基準鍵。',keys:'ABCDEFGHIJKLMNOPQRSTUVWXYZ',fingers:'依提示使用對應手指，雙手保持放鬆',text:'abcdefghijklmnopqrstuvwxyz',goal:'連續完成 a–z 共 26 個字母，不加空格'},
 {id:'reach',group:'en',title:'食指延伸',sub:'Reach out',desc:'食指往左右伸展，認識 G、H、R、T、Y、U 與更多鄰居。',keys:'G H R T Y U V B N M',fingers:'食指負責最寬的活動範圍',text:'fg hj fr gt hy ju vb bn nm gh rh th',goal:'保持手腕自然平直，讓食指完成延伸'},
 {id:'top',group:'en',title:'上排鍵',sub:'Top row',desc:'向上探索 QWERTY，讓手指學會回到基準鍵。',keys:'Q W E R T Y U I O P',fingers:'每次按鍵後，手指回到基準鍵',text:'we type quiet work your power quite true',goal:'輸入常用單字，準確率達到 90%'},
 {id:'bottom',group:'en',title:'下排鍵',sub:'Bottom row',desc:'補齊字母地圖，練習 Z、X、C、V 以及標點。',keys:'Z X C V B N M , . /',fingers:'保持雙手放鬆，不要用力敲擊',text:'mix civic box brave next move, nice.',goal:'完成一段含標點的練習文字'},
