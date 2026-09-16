@@ -77,3 +77,14 @@ test('ranking filters preserve class rank during name search and class statistic
   assert.deepEqual(stats,[{className:'701',count:2,bestSpeed:80,averageSpeed:60,averageAccuracy:93},{className:'702',count:1,bestSpeed:100,averageSpeed:100,averageAccuracy:100}]);
   assert.deepEqual(plain(C.rankingClassStats([])),[]);
 });
+
+
+test('alphabet tests produce exactly 26 lowercase letters in ordered or shuffled mode', () => {
+  const alphabet='abcdefghijklmnopqrstuvwxyz';
+  assert.equal(C.alphabetText('ordered'),alphabet);
+  const shuffled=C.alphabetText('random',()=>0);
+  assert.notEqual(shuffled,alphabet);
+  assert.equal(shuffled.length,26);
+  assert.equal([...shuffled].sort().join(''),alphabet);
+  assert.equal(new Set(shuffled).size,26);
+});

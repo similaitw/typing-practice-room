@@ -14,7 +14,7 @@ function load() {
   }
 }
 let data = load(), lessonId = 'home', tutorialStep = 0, practice = null;
-let test = {lang:'en', duration:60, text:'', started:false, finished:false, timer:null, committed:'', composing:false};
+let test = {lang:'en', alphabetMode:'ordered', duration:60, text:'', started:false, finished:false, timer:null, committed:'', composing:false};
 let activeStudent = '', pendingRoster = null;
 const previousArticles = {};
 const rankingPage = $('#player-ranking');
@@ -264,6 +264,10 @@ function setSelected(id, value) {
   $$(`${id} button`).forEach(b => {const selected = b.dataset.value === value; b.classList.toggle('sel', selected); b.setAttribute('aria-pressed', selected);});
 }
 function pickText() {
+  if (test.lang === 'alphabet') {
+    $('#test-count').textContent = test.alphabetMode === 'random' ? '26 個字母 · 亂數排列' : '26 個字母 · 連續 a–z';
+    return C.alphabetText(test.alphabetMode);
+  }
   if (test.lang === 'custom') {$('#test-count').textContent = '自訂文章'; return $('#custom-text').value.trim();}
   const pool = test.lang === 'zh' ? ZH_TEXTS : EN_TEXTS;
   const choices = pool.map((_,i) => i).filter(i => i !== previousArticles[test.lang]);
@@ -275,8 +279,9 @@ function pickText() {
 function resetTest() {
   clearInterval(test.timer);
   test = {...test, started:false, finished:false, start:0, timer:null, composing:false, committed:'', text:pickText()};
-  test.language = test.lang === 'custom' ? C.languageOf(test.text) : test.lang;
+  test.language = test.lang === 'custom' ? C.languageOf(test.text) : test.lang === 'alphabet' ? 'en' : test.lang;
   $('#custom-editor').hidden = test.lang !== 'custom';
+  $('#alphabet-test-options').hidden = test.lang !== 'alphabet';
   lockIdentity(false);
   $('#timer').textContent = test.duration;
   $('#live-speed').textContent = '0'; $('#live-accuracy').textContent = '100'; $('#live-progress').textContent = '0';
@@ -342,6 +347,7 @@ $('#test-input').ondrop = e => e.preventDefault();
 $('#reset-test').onclick = () => {resetTest(); $('#test-input').focus();};
 $('#duration').onclick = e => {if (e.target.dataset.value) {test.duration = Number(e.target.dataset.value); setSelected('#duration',String(test.duration)); resetTest();}};
 $('#lang').onclick = e => {if (e.target.dataset.value) {test.lang = e.target.dataset.value; setSelected('#lang',test.lang); resetTest();}};
+$('#alphabet-mode').onclick = e => {if (['ordered','random'].includes(e.target.dataset.value)) {test.alphabetMode = e.target.dataset.value; setSelected('#alphabet-mode',test.alphabetMode); resetTest();}};
 $('#apply-custom').onclick = () => {resetTest(); if (test.text) $('#test-input').focus();};
 $('#custom-text').oninput = () => {if (test.lang === 'custom') {clearInterval(test.timer); test.started = false; test.finished = true; $('#test-input').disabled = true; lockIdentity(false); $('#test-state').textContent = '文章已變更，請按「套用文章」重新開始。';}};
 $('#student-select').onchange = e => {activeStudent = e.target.value; syncIdentity(); stats(); resetTest(); renderPlayerRanking();};
@@ -567,5 +573,5 @@ if (storageIssue) {
   $('#download-raw').onclick = () => {try {download('typing-practice-room-recovery.txt',localStorage.getItem(KEY) || '', 'text/plain');} catch {toast('瀏覽器禁止讀取儲存空間。');}};
 }
 $$('.shift-reference').forEach(el => {el.innerHTML = shiftReferenceHTML();});
-setSelected('#lang','en'); setSelected('#duration','60');
+setSelected('#lang','en'); setSelected('#duration','60'); setSelected('#alphabet-mode','ordered');
 fillStudents(); stats(); renderLessons(); protectTeacherActions();

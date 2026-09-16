@@ -15,6 +15,16 @@ const TypingCore = (() => {
   }
   const canSaveRecord = record => record.typedLength > 0 &&
     (record.source !== 'custom' || record.correctChars / record.typedLength >= 0.9);
+  function alphabetText(mode = 'ordered', random = Math.random) {
+    const letters = chars('abcdefghijklmnopqrstuvwxyz');
+    if (mode === 'random') {
+      for (let i = letters.length - 1; i > 0; i--) {
+        const j = Math.floor(random() * (i + 1));
+        [letters[i], letters[j]] = [letters[j], letters[i]];
+      }
+    }
+    return letters.join('');
+  }
   const languageOf = text => /[\p{Script=Han}\p{Script=Bopomofo}]/u.test(text) ? 'zh' : 'en';
   const compareScores = (a, b) => b.speed - a.speed || b.accuracy - a.accuracy || b.createdAt.localeCompare(a.createdAt);
   function rank(records, language, threshold, students) {
@@ -137,5 +147,5 @@ const TypingCore = (() => {
     if (Number.isInteger(p.settings?.lessonLength) && p.settings.lessonLength >= 50 && p.settings.lessonLength <= 2000) result.settings.lessonLength = p.settings.lessonLength;
     return result;
   }
-  return {emptyData, chars, measure, canSaveRecord, filterRanking, rankingClassStats, languageOf, compareScores, rank, parseCSV, rosterCSV, csvCell, validateData};
+  return {emptyData, chars, measure, alphabetText, canSaveRecord, filterRanking, rankingClassStats, languageOf, compareScores, rank, parseCSV, rosterCSV, csvCell, validateData};
 })();
