@@ -45,7 +45,7 @@
     const isSelf = row => currentStudent && row.studentClass === currentStudent.className && row.studentName === currentStudent.name && row.studentSeat === currentStudent.seat;
     container.innerHTML = shown.map((row, index) => `
       <div class="rank simple-rank ${isSelf(row) ? 'rank-self' : ''}">
-        <span class="rank-no">${index + 1}</span>
+        <span class="rank-no">${row.rank || index + 1}</span>
         <span class="rank-name"><strong>${escapeHtml(identityLabel(row))}${isSelf(row) ? '（我）' : ''}</strong></span>
         <span class="rank-speed"><strong>${escapeHtml(row.speed)}</strong><small>${escapeHtml(row.unit)}</small></span>
       </div>`).join('');
@@ -58,7 +58,7 @@
       output.textContent = '輸入姓名即可查詢目前名次。';
       return;
     }
-    const matches = rows.map((row, index) => ({row, rank: index + 1})).filter(item => normalizedName(item.row.studentName) === query);
+    const matches = rows.map((row, index) => ({row, rank: row.rank || index + 1})).filter(item => normalizedName(item.row.studentName).includes(query));
     if (!matches.length) {
       output.textContent = `找不到「${text(input.value)}」的排行榜成績。`;
       return;
@@ -119,6 +119,7 @@
       <div class="card-head"><div><p class="eyebrow">LEADERBOARD</p><h2 id="player-ranking-title" tabindex="-1">排行榜</h2></div></div>
       <div class="simple-ranking-controls">
         <label>語言<select id="player-ranking-language"><option value="en">英文 WPM</option><option value="zh">中文 CPM</option></select></label>
+        <label>班級<select id="player-ranking-class"><option value="">全部班級</option></select></label>
         <label>顯示<select id="player-ranking-limit">${LIMITS.map(value => `<option value="${value}">前 ${value} 名</option>`).join('')}</select></label>
         <label class="simple-ranking-search">姓名查詢<input id="player-ranking-search" type="search" maxlength="80" autocomplete="off" placeholder="輸入姓名"></label>
         <button id="player-ranking-search-btn" class="btn outline" type="button">查詢名次</button>
@@ -126,21 +127,29 @@
       </div>
       <p id="player-ranking-search-result" class="simple-ranking-result" role="status">輸入姓名即可查詢目前名次。</p>
       <div id="player-ranking-list"></div>
-      <p class="simple-ranking-note">排行榜以個人最佳速度排序；完成測速後會自動更新。</p>
+      <p class="simple-ranking-note">正確率至少 90%，依個人最佳速度排序。選班級後顯示班內名次；姓名篩選保留原名次。</p>
       <p id="cloud-sync-status" hidden></p><p id="player-ranking-rule" hidden></p>`;
     byId('player-ranking-language').value = currentLanguage;
     byId('player-ranking-limit').value = String(readLimit(PUBLIC_LIMIT_KEY));
     byId('player-ranking-language').onchange = () => simpleRenderPlayerRanking();
     byId('player-ranking-limit').onchange = event => {
       writeLimit(PUBLIC_LIMIT_KEY, event.target.value);
-      renderRows(byId('player-ranking-list'), publicRows, event.target.value, data.students.find(student => student.id === activeStudent));
-      renderSearchResult(publicRows, byId('player-ranking-search'), byId('player-ranking-search-result'));
+      paintPublicRanking();
     };
     byId('retry-cloud-sync').onclick = async () => {
       await flushPendingRecords();
       await simpleRenderPlayerRanking();
     };
-    attachSearch(byId('player-ranking-search'), byId('player-ranking-search-btn'), () => publicRows, byId('player-ranking-search-result'));
+    byId('player-ranking-class').onchange = paintPublicRanking;
+    byId('player-ranking-search').oninput = paintPublicRanking;
+    byId('player-ranking-search-btn').onclick = paintPublicRanking;
+  }
+
+  function paintPublicRanking() {
+    const className = byId('player-ranking-class').value;
+    const rows = C.filterRanking(publicRows,className,byId('player-ranking-search').value);
+    renderRows(byId('player-ranking-list'),rows,byId('player-ranking-limit').value,data.students.find(student => student.id === activeStudent));
+    byId('player-ranking-search-result').textContent = `${className || '全部班級'} · 符合 ${rows.length} 人 · 顯示前 ${Math.min(rows.length,safeLimit(byId('player-ranking-limit').value))} 筆${publicRows.length >= 2000 ? '（本次資料為全站前 2,000 名）' : ''}`;
   }
 
   async function simpleRenderPlayerRanking(background = false) {
@@ -154,8 +163,12 @@
       const rows = await requestRanking(language);
       if (request !== publicRequest) return;
       publicRows = rows;
-      renderRows(list, rows, byId('player-ranking-limit')?.value, data.students.find(student => student.id === activeStudent));
-      renderSearchResult(rows, byId('player-ranking-search'), byId('player-ranking-search-result'));
+      const select = byId('player-ranking-class'), selected = select.value;
+      const classes = C.rankingClassStats(rows);
+      select.innerHTML = '<option value="">全部班級</option>' + classes.map(group => `<option value="${escapeHtml(group.className)}">${escapeHtml(group.className)}</option>`).join('');
+      if (selected && !classes.some(group => group.className === selected)) select.add(new Option(selected,selected));
+      select.value = selected;
+      paintPublicRanking();
     } catch (error) {
       if (request === publicRequest && !background && list) list.innerHTML = `<div class="empty">${escapeHtml(error.message)}</div>`;
     } finally {

@@ -454,6 +454,21 @@ window.addEventListener('online',refreshVisibleTeacher);
 document.addEventListener('visibilitychange',refreshVisibleTeacher);
 $('#teacher-refresh').onclick = refreshTeacherRecords;
 let teacherRankingRequest = 0;
+let teacherRankingRows = [];
+function paintTeacherRanking() {
+  const className = $('#leaderboard-class').value;
+  const rows = C.filterRanking(teacherRankingRows,className,$('#leaderboard-name').value);
+  const limit = Number($('#leaderboard-limit').value);
+  const shown = limit ? rows.slice(0,limit) : rows;
+  $('#leaderboard-filter-status').textContent = `${className || '全部班級'} · 符合 ${rows.length} 人 · 顯示 ${shown.length} 筆${teacherRankingRows.length >= 2000 ? '（本次資料為全站前 2,000 名）' : ''}`;
+  $('#leaderboard').innerHTML = shown.length ? shown.map((r,i) => `<div class="rank"><span class="rank-no">${r.rank}</span><span class="rank-name"><strong>${escapeHtml([r.studentClass,r.studentName,r.studentSeat ? r.studentSeat + '號' : ''].filter(Boolean).join(' ｜ '))}</strong><small>${formatDate(r.createdAt)}</small></span><span class="rank-speed"><strong>${r.speed}</strong><small>${r.unit}</small></span><span class="rank-accuracy">${r.accuracy}%</span><span class="rank-actions"><button type="button" data-rank-edit="${i}">編輯成績</button><button type="button" data-rank-delete="${i}">刪除成績</button></span></div>`).join('') : '<div class="empty">沒有符合篩選的排行榜成績。</div>';
+  $$('[data-rank-edit]').forEach(button => button.onclick = () => editRecord(shown[Number(button.dataset.rankEdit)]));
+  $$('[data-rank-delete]').forEach(button => button.onclick = () => deleteRecord(shown[Number(button.dataset.rankDelete)]));
+  const groups = C.rankingClassStats(teacherRankingRows).filter(group => !className || group.className === className);
+  const unit = $('#leaderboard-language').value === 'zh' ? 'CPM' : 'WPM';
+  $('#ranking-class-stats').innerHTML = groups.length ? `<div class="record-wrap"><table class="record"><caption>班級統計 · ${unit}</caption><thead><tr><th>班級</th><th>上榜人數</th><th>平均速度</th><th>最高速度</th><th>平均正確率</th></tr></thead><tbody>${groups.map(group => `<tr><td>${escapeHtml(group.className)}</td><td>${group.count}</td><td>${group.averageSpeed}</td><td>${group.bestSpeed}</td><td>${group.averageAccuracy}%</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">目前沒有班級統計資料。</div>';
+  protectTeacherActions();
+}
 async function renderTeacherRanking() {
   const request = ++teacherRankingRequest;
   try {
@@ -461,12 +476,19 @@ async function renderTeacherRanking() {
     if (!response.ok) throw Error();
     const rows = await response.json();
     if (request !== teacherRankingRequest || !teacherIsActive()) return;
-    $('#leaderboard').innerHTML = rows.length ? rows.map((r,i) => `<div class="rank"><span class="rank-no">${i + 1}</span><span class="rank-name"><strong>${escapeHtml([r.studentClass,r.studentName,r.studentSeat ? r.studentSeat + '號' : ''].filter(Boolean).join(' ｜ '))}</strong><small>${formatDate(r.createdAt)}</small></span><span class="rank-speed"><strong>${r.speed}</strong><small>${r.unit}</small></span><span class="rank-accuracy">${r.accuracy}%</span><span class="rank-actions"><button type="button" data-rank-edit="${i}">編輯成績</button><button type="button" data-rank-delete="${i}">刪除成績</button></span></div>`).join('') : '<div class="empty">目前沒有符合門檻的成績。</div>';
-    $$('[data-rank-edit]').forEach(button => button.onclick = () => editRecord(rows[Number(button.dataset.rankEdit)]));
-    $$('[data-rank-delete]').forEach(button => button.onclick = () => deleteRecord(rows[Number(button.dataset.rankDelete)]));
-    protectTeacherActions();
+    teacherRankingRows = rows;
+    const select = $('#leaderboard-class'), selected = select.value;
+    const classes = C.rankingClassStats(rows);
+    select.innerHTML = '<option value="">全部班級</option>' + classes.map(group => `<option value="${escapeHtml(group.className)}">${escapeHtml(group.className)}</option>`).join('');
+    if (selected && !classes.some(group => group.className === selected)) select.add(new Option(selected,selected));
+    select.value = selected;
+    paintTeacherRanking();
   } catch {
-    if (request === teacherRankingRequest) $('#leaderboard').innerHTML = '<div class="empty">排行榜同步失敗，請重新整理。</div>';
+    if (request === teacherRankingRequest) {
+      teacherRankingRows = [];
+      paintTeacherRanking();
+      $('#leaderboard-filter-status').textContent = '排行榜同步失敗，請重新整理。';
+    }
   }
 }
 async function editRecord(record) {
@@ -527,6 +549,9 @@ function renderScores() {
   protectTeacherActions();
 }
 $('#leaderboard-language').onchange = renderScores;
+$('#leaderboard-class').onchange = paintTeacherRanking;
+$('#leaderboard-name').oninput = paintTeacherRanking;
+$('#leaderboard-limit').onchange = paintTeacherRanking;
 ['#filter-student','#filter-language','#filter-duration'].forEach(id => $(id).onchange = renderScores);
 function download(name, content, type) {
   const url = URL.createObjectURL(new Blob([content],{type})), a = document.createElement('a');

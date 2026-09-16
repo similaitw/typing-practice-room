@@ -63,3 +63,17 @@ test('custom records require actual 90 percent accuracy before saving', () => {
   }
   assert.equal(C.canSaveRecord({...record, correctChars:0, typedLength:10}), true);
 });
+
+
+test('ranking filters preserve class rank during name search and class statistics ignore display limits', () => {
+  const rows=[
+    {studentClass:'702',studentName:'小明',speed:100,accuracy:100},
+    {studentClass:'701',studentName:'小安',speed:80,accuracy:96},
+    {studentClass:'701',studentName:'小明',speed:40,accuracy:90}];
+  assert.deepEqual(plain(C.filterRanking(rows,'701','明')).map(row=>[row.studentName,row.rank]),[['小明',2]]);
+  assert.equal(C.filterRanking(rows,'703','').length,0);
+  assert.equal(C.filterRanking(rows,'','不存在').length,0);
+  const stats=plain(C.rankingClassStats(rows));
+  assert.deepEqual(stats,[{className:'701',count:2,bestSpeed:80,averageSpeed:60,averageAccuracy:93},{className:'702',count:1,bestSpeed:100,averageSpeed:100,averageAccuracy:100}]);
+  assert.deepEqual(plain(C.rankingClassStats([])),[]);
+});

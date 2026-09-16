@@ -24,6 +24,26 @@ const TypingCore = (() => {
       .sort(compareScores).forEach(r => { if (!best.has(r.studentId)) best.set(r.studentId, r); });
     return [...best.values()].sort(compareScores);
   }
+  function filterRanking(rows, className = '', name = '') {
+    const query = name.trim().toLocaleLowerCase('zh-TW');
+    return rows.filter(row => (!className || row.studentClass === className))
+      .map((row,index) => ({...row, rank:index + 1}))
+      .filter(row => !query || row.studentName.toLocaleLowerCase('zh-TW').includes(query));
+  }
+  function rankingClassStats(rows) {
+    const groups = new Map();
+    for (const row of rows) {
+      const name = row.studentClass;
+      if (!groups.has(name)) groups.set(name, {className:name,count:0,totalSpeed:0,totalAccuracy:0,bestSpeed:0});
+      const group = groups.get(name);
+      group.count++; group.totalSpeed += row.speed; group.totalAccuracy += row.accuracy;
+      group.bestSpeed = Math.max(group.bestSpeed,row.speed);
+    }
+    return [...groups.values()].sort((a,b) => a.className.localeCompare(b.className,'zh-TW',{numeric:true}))
+      .map(group => ({className:group.className,count:group.count,bestSpeed:group.bestSpeed,
+        averageSpeed:Math.round(group.totalSpeed / group.count * 10) / 10,
+        averageAccuracy:Math.round(group.totalAccuracy / group.count * 10) / 10}));
+  }
   function parseCSV(text) {
     const rows = []; let row = [], cell = '', quoted = false, closed = false;
     text = text.replace(/^\uFEFF/, '');
@@ -117,5 +137,5 @@ const TypingCore = (() => {
     if (Number.isInteger(p.settings?.lessonLength) && p.settings.lessonLength >= 50 && p.settings.lessonLength <= 2000) result.settings.lessonLength = p.settings.lessonLength;
     return result;
   }
-  return {emptyData, chars, measure, canSaveRecord, languageOf, compareScores, rank, parseCSV, rosterCSV, csvCell, validateData};
+  return {emptyData, chars, measure, canSaveRecord, filterRanking, rankingClassStats, languageOf, compareScores, rank, parseCSV, rosterCSV, csvCell, validateData};
 })();
