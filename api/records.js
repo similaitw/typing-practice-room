@@ -7,6 +7,8 @@ const {readStudentSession, sameOrigin} = require('../lib/student-session');
 const {cleanMistakes} = require('../lib/mistake-analysis');
 const COOKIE = '__Host-typing-teacher';
 const TTL = 4 * 60 * 60;
+const MAX_SPEED = Object.freeze({en: 300, zh: 500});
+const SCORE_TOLERANCE = 1;
 const digest = value => crypto.createHash('sha256').update(value).digest();
 const equal = (a, b) => typeof a === 'string' && a.length === b.length && crypto.timingSafeEqual(digest(a), digest(b));
 function sessionValid(header, secret, password) {
@@ -33,10 +35,15 @@ function cleanRecord(record) {
       !['en', 'zh'].includes(record.language) || !['builtin', 'custom'].includes(record.source) ||
       ![15, 30, 60, 120].includes(record.duration) || record.unit !== (record.language === 'en' ? 'WPM' : 'CPM') ||
       !Number.isFinite(record.elapsedSeconds) || record.elapsedSeconds <= 0 || record.elapsedSeconds > record.duration + 1 ||
-      !integer(record.speed, 100000) || !integer(record.accuracy, 100) || !integer(record.correctChars, 10000000) ||
+      !integer(record.speed, MAX_SPEED[record.language]) || !integer(record.accuracy, 100) || !integer(record.correctChars, 10000000) ||
       !integer(record.errors, 10000000) || !integer(record.typedLength, 10000000) || !integer(record.targetLength, 10000000) ||
       !record.typedLength || !record.targetLength || record.correctChars + record.errors !== record.typedLength ||
       record.correctChars > record.targetLength || typeof record.createdAt !== 'string' || !Number.isFinite(Date.parse(record.createdAt))) return null;
+  const expectedAccuracy = Math.round(record.correctChars / record.typedLength * 100);
+  const standardUnits = record.language === 'en' ? record.correctChars / 5 : record.correctChars;
+  const expectedSpeed = Math.round(standardUnits / (record.elapsedSeconds / 60));
+  if (Math.abs(record.accuracy - expectedAccuracy) > SCORE_TOLERANCE ||
+      Math.abs(record.speed - expectedSpeed) > SCORE_TOLERANCE) return null;
   const text = (value, max) => typeof value === 'string' && value.length <= max ? value : '';
   const assignmentId = record.assignmentId == null || record.assignmentId === '' ? null :
     (typeof record.assignmentId === 'string' && record.assignmentId.length <= 100 && !/\s/.test(record.assignmentId) ? record.assignmentId : undefined);
@@ -115,7 +122,14 @@ module.exports = async function handler(req, res) {
             ORDER BY r.speed DESC, r.accuracy DESC, r.created_at DESC, r.id) AS position
         FROM typing_records r
         JOIN typing_students s ON s.id = r.student_id AND s.active = true
-        WHERE r.language = ${language} AND r.accuracy >= ${threshold}
+        WHERE r.language = ${language} AND r.source = 'builtin' AND r.accuracy >= ${threshold}
+          AND r.elapsed_seconds >= 3 AND r.correct_chars >= 10
+          AND r.speed <= CASE WHEN r.language = 'en' THEN 300 ELSE 500 END
+          AND ABS(r.accuracy - ROUND(r.correct_chars * 100.0 / NULLIF(r.typed_length, 0))) <= 1
+          AND ABS(r.speed - ROUND(
+            (CASE WHEN r.language = 'en' THEN r.correct_chars / 5.0 ELSE r.correct_chars END)
+            / NULLIF(r.elapsed_seconds / 60.0, 0)
+          )) <= 1
           AND r.student_id IS NOT NULL AND r.student_class <> '' AND r.student_name <> '' AND r.student_seat <> ''
       ) SELECT id, student_class, student_name, student_seat, speed, unit, accuracy, created_at
         FROM best WHERE position = 1 ORDER BY speed DESC, accuracy DESC, created_at DESC,
@@ -141,7 +155,7 @@ module.exports = async function handler(req, res) {
       }
       const text = (value,max) => typeof value === 'string' && value.trim().length <= max && !/[\r\n\t]/.test(value);
       if (!text(body.studentClass,40) || !text(body.studentName,80) || !text(body.studentSeat,20) ||
-          !Number.isInteger(body.speed) || body.speed < 0 || body.speed > 100000 ||
+          !Number.isInteger(body.speed) || body.speed < 0 || body.speed > MAX_SPEED.zh ||
           !Number.isInteger(body.accuracy) || body.accuracy < 0 || body.accuracy > 100) return res.status(400).json({error:'班級、姓名、座號或成績格式不正確。正確率需為 0–100 的整數。'});
       const studentClass = body.studentClass.trim(), studentName = body.studentName.trim(), studentSeat = body.studentSeat.trim();
       const label = [studentClass,studentName,studentSeat ? studentSeat + '號' : ''].filter(Boolean).join(' ｜ ') || '訪客';
