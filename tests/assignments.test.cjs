@@ -24,7 +24,7 @@ test('assignment validation rejects missing classes and impossible thresholds', 
 });
 
 test('record validation preserves a safe assignment id and rejects whitespace ids', () => {
-  const base = {id:'r1',studentId:'s1',studentLabel:'701 ｜ 王小明 ｜ 1號',studentClass:'701',studentName:'王小明',studentSeat:'01',language:'en',source:'builtin',duration:60,elapsedSeconds:60,speed:20,unit:'WPM',accuracy:90,correctChars:90,errors:10,typedLength:100,targetLength:200,createdAt:new Date().toISOString()};
+  const base = {id:'r1',studentId:'s1',studentLabel:'701 ｜ 王小明 ｜ 1號',studentClass:'701',studentName:'王小明',studentSeat:'01',language:'en',source:'builtin',duration:60,elapsedSeconds:60,speed:18,unit:'WPM',accuracy:90,correctChars:90,errors:10,typedLength:100,targetLength:200,createdAt:new Date().toISOString()};
   assert.equal(cleanRecord({...base,assignmentId:'a-123'}).assignmentId,'a-123');
   assert.equal(cleanRecord({...base,assignmentId:'bad id'}),null);
   assert.equal(cleanRecord(base).assignmentId,null);
