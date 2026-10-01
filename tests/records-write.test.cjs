@@ -31,7 +31,7 @@ test('record uploads use existing tables without requiring schema creation privi
     statements.length = 0;
     await context.module.exports({method:'POST', headers:{host:'test'}, body:{...body,
       source:'custom', correctChars, errors:200-correctChars, typedLength:200, targetLength:200,
-      accuracy:100}}, res);
+      speed:Math.round(correctChars / 5), accuracy:Math.round(correctChars / 200 * 100)}}, res);
     assert.equal(res.code, expectedStatus, 'use character counts even if reported accuracy is forged');
     assert.equal(statements.length, expectedStatus === 201 ? 1 : 0);
   }
@@ -39,4 +39,15 @@ test('record uploads use existing tables without requiring schema creation privi
   await context.module.exports({method:'POST', headers:{host:'test'}, body:{...body, assignmentId:'assignment'}}, res);
   assert.equal(res.code, 401);
   assert.equal(statements.length, 0, 'assignments still require a student session');
+
+  for (const forged of [
+    {...body, speed:10000},
+    {...body, speed:1, accuracy:50},
+    {...body, speed:80, accuracy:100}
+  ]) {
+    statements.length = 0;
+    await context.module.exports({method:'POST', headers:{host:'test'}, body:forged}, res);
+    assert.equal(res.code, 400, 'forged or mathematically inconsistent scores are rejected');
+    assert.equal(statements.length, 0);
+  }
 });
