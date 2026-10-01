@@ -59,6 +59,7 @@ test('language changes supersede a pending background response', async () => {
   const pending = [];
   const app = setup(url => new Promise(resolve => pending.push({url, resolve})));
   const old = app.intervals[0].fn();
+  assert.match(pending[0].url, /period=class/);
   app.context.$('#player-ranking-language').value = 'zh';
   const current = app.context.renderPlayerRanking();
   assert.match(pending[1].url, /language=zh/);

@@ -97,7 +97,7 @@ module.exports = async function handler(req, res) {
         record.createdAt = new Date().toISOString();
       }
       await sql`INSERT INTO typing_records (id, student_id, student_label, student_class, student_name, student_seat, language, source, duration, elapsed_seconds, speed, unit, accuracy, correct_chars, errors, typed_length, target_length, assignment_id, mistakes, created_at)
-        VALUES (${record.id}, ${record.studentId}, ${record.studentLabel}, ${record.studentClass}, ${record.studentName}, ${record.studentSeat}, ${record.language}, ${record.source}, ${record.duration}, ${record.elapsedSeconds}, ${record.speed}, ${record.unit}, ${record.accuracy}, ${record.correctChars}, ${record.errors}, ${record.typedLength}, ${record.targetLength}, ${record.assignmentId}, ${JSON.stringify(record.mistakes)}::jsonb, ${record.createdAt})
+        VALUES (${record.id}, ${record.studentId}, ${record.studentLabel}, ${record.studentClass}, ${record.studentName}, ${record.studentSeat}, ${record.language}, ${record.source}, ${record.duration}, ${record.elapsedSeconds}, ${record.speed}, ${record.unit}, ${record.accuracy}, ${record.correctChars}, ${record.errors}, ${record.typedLength}, ${record.targetLength}, ${record.assignmentId}, ${JSON.stringify(record.mistakes)}::jsonb, NOW())
         ON CONFLICT (id) DO NOTHING`;
       return res.status(201).json({saved: true, id: record.id, assignmentId: record.assignmentId});
     } catch (error) {return res.status(502).json({error: error.message || '雲端資料服務目前無法使用。'});}
@@ -106,6 +106,8 @@ module.exports = async function handler(req, res) {
   const publicQuery = new URL(req.url, `https://${req.headers.host}`).searchParams;
   if (req.method === 'GET' && publicQuery.get('view') === 'leaderboard') {
     const manage = publicQuery.get('manage') === '1';
+    const period = publicQuery.get('period') === 'off' ? 'off' : 'class';
+    if (period === 'off' && !manage) return res.status(403).json({error:'下課時間排行榜僅限管理者查看。'});
     if (manage) {
       let credentials;
       try {credentials = await readCredentials();}
@@ -123,6 +125,13 @@ module.exports = async function handler(req, res) {
         FROM typing_records r
         JOIN typing_students s ON s.id = r.student_id AND s.active = true
         WHERE r.language = ${language} AND r.source = 'builtin' AND r.accuracy >= ${threshold}
+          AND CASE WHEN ${period === 'off'}::boolean THEN
+            (r.created_at AT TIME ZONE 'Asia/Taipei')::time < TIME '08:25'
+              OR (r.created_at AT TIME ZONE 'Asia/Taipei')::time >= TIME '16:11'
+          ELSE
+            (r.created_at AT TIME ZONE 'Asia/Taipei')::time >= TIME '08:25'
+              AND (r.created_at AT TIME ZONE 'Asia/Taipei')::time < TIME '16:11'
+          END
           AND r.elapsed_seconds >= 3 AND r.correct_chars >= 10
           AND r.speed <= CASE WHEN r.language = 'en' THEN 300 ELSE 500 END
           AND ABS(r.accuracy - ROUND(r.correct_chars * 100.0 / NULLIF(r.typed_length, 0))) <= 1

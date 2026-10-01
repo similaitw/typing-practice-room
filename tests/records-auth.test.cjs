@@ -42,9 +42,9 @@ test('cloud query accepts the session issued by teacher login and rejects tamper
     assert.equal((await mutate('PATCH',{id:'record',studentClass:'701',studentName:'同學',studentSeat:'01',speed:50,accuracy:95})).code,404);
     assert.equal((await mutate('DELETE',{id:'record'})).code,404);
     assert.equal(queries,3,'valid mutations must query database and report missing records');
-    const management = async session => {
+    const management = async (session, period='class') => {
       const res=response();
-      await handler({method:'GET',url:'/api/records?view=leaderboard&manage=1',headers:{host:'typing.example',cookie:session}},res);
+      await handler({method:'GET',url:`/api/records?view=leaderboard&manage=1&period=${period}`,headers:{host:'typing.example',cookie:session}},res);
       return res;
     };
     assert.equal((await management('')).code,401);
@@ -52,6 +52,8 @@ test('cloud query accepts the session issued by teacher login and rejects tamper
     assert.equal(queries,3,'management ranking rejects missing or forged sessions before database access');
     assert.equal((await management(cookie)).code,200);
     assert.equal(queries,4);
+    assert.equal((await management(cookie,'off')).code,200,'teachers can view the off-hours leaderboard');
+    assert.equal(queries,5);
 
 
   } finally {

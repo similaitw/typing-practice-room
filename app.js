@@ -22,6 +22,7 @@ if (rankingPage) {
   rankingPage.classList.add('view');
   $('#test').after(rankingPage);
 }
+$('.ranking-filters')?.insertAdjacentHTML('afterbegin', '<label>排行榜時段<select id="leaderboard-period"><option value="class">上課時間（08:25–16:10）</option><option value="off">下課時間（僅管理者）</option></select></label>');
 $('#overview .hero')?.insertAdjacentHTML('beforebegin', '<figure class="hand-placement homepage-placement"><div class="hand-placement-heading"><div><p class="eyebrow">START HERE / HAND POSITION</p><strong>先看懂鍵盤，再開始練習。</strong></div><a href="assets/hand-placement.svg" target="_blank" rel="noopener">開啟大圖 ↗</a></div><div class="hand-placement-scroll" tabindex="0" role="region" aria-label="首頁鍵盤與手指位置圖"><img src="assets/hand-placement.svg" width="960" height="810" alt="標準 QWERTY 鍵盤與雙手基準位置圖"></div><figcaption>和你低頭看鍵盤的方向相同。先找 F、J 的凸點，兩隻拇指輕放空白鍵。</figcaption></figure>');
 const studentLabel = s => [s.className || '', s.name, s.seat ? s.seat + '號' : ''].filter(Boolean).join(' ｜ ');
 function updateStudentRecords(s) {
@@ -393,10 +394,10 @@ async function renderPlayerRanking(background = false) {
   rankingLoading = true;
   const request = ++rankingRequest;
   const language = $('#player-ranking-language').value, threshold = data.settings.threshold ?? 90;
-  $('#player-ranking-rule').textContent = `資料庫排行榜 · 個人最佳速度，最低正確率 ${threshold}%。同速先比正確率，再比紀錄時間；訪客及未填完整身分者不列入。最多顯示 2,000 位。`;
+  $('#player-ranking-rule').textContent = `上課時間排行榜（台北時間 08:25–16:10）· 個人最佳速度，最低正確率 ${threshold}%。同速先比正確率，再比紀錄時間；訪客及未填完整身分者不列入。最多顯示 2,000 位。`;
   if (background !== true) $('#player-ranking-list').innerHTML = '<div class="empty">正在讀取資料庫排行榜…</div>';
   try {
-    const response = await fetch(`/api/records?view=leaderboard&language=${language}&threshold=${threshold}`, {cache:'no-store', signal:AbortSignal.timeout(15000)});
+    const response = await fetch(`/api/records?view=leaderboard&language=${language}&threshold=${threshold}&period=class`, {cache:'no-store', signal:AbortSignal.timeout(15000)});
     if (!response.ok) throw Error();
     const rows = await response.json();
     if (request !== rankingRequest) return;
@@ -463,10 +464,11 @@ let teacherRankingRequest = 0;
 let teacherRankingRows = [];
 function paintTeacherRanking() {
   const className = $('#leaderboard-class').value;
+  const periodLabel = $('#leaderboard-period').value === 'off' ? '下課時間' : '上課時間';
   const rows = C.filterRanking(teacherRankingRows,className,$('#leaderboard-name').value);
   const limit = Number($('#leaderboard-limit').value);
   const shown = limit ? rows.slice(0,limit) : rows;
-  $('#leaderboard-filter-status').textContent = `${className || '全部班級'} · 符合 ${rows.length} 人 · 顯示 ${shown.length} 筆${teacherRankingRows.length >= 2000 ? '（本次資料為全站前 2,000 名）' : ''}`;
+  $('#leaderboard-filter-status').textContent = `${periodLabel} · ${className || '全部班級'} · 符合 ${rows.length} 人 · 顯示 ${shown.length} 筆${teacherRankingRows.length >= 2000 ? '（本次資料為全站前 2,000 名）' : ''}`;
   $('#leaderboard').innerHTML = shown.length ? shown.map((r,i) => `<div class="rank"><span class="rank-no">${r.rank}</span><span class="rank-name"><strong>${escapeHtml([r.studentClass,r.studentName,r.studentSeat ? r.studentSeat + '號' : ''].filter(Boolean).join(' ｜ '))}</strong><small>${formatDate(r.createdAt)}</small></span><span class="rank-speed"><strong>${r.speed}</strong><small>${r.unit}</small></span><span class="rank-accuracy">${r.accuracy}%</span><span class="rank-actions"><button type="button" data-rank-edit="${i}">編輯成績</button><button type="button" data-rank-delete="${i}">刪除成績</button></span></div>`).join('') : '<div class="empty">沒有符合篩選的排行榜成績。</div>';
   $$('[data-rank-edit]').forEach(button => button.onclick = () => editRecord(shown[Number(button.dataset.rankEdit)]));
   $$('[data-rank-delete]').forEach(button => button.onclick = () => deleteRecord(shown[Number(button.dataset.rankDelete)]));
@@ -478,7 +480,8 @@ function paintTeacherRanking() {
 async function renderTeacherRanking() {
   const request = ++teacherRankingRequest;
   try {
-    const response = await fetch(`/api/records?view=leaderboard&language=${$('#leaderboard-language').value}&threshold=90&manage=1`,{cache:'no-store',signal:AbortSignal.timeout(15000)});
+    const period = $('#leaderboard-period').value === 'off' ? 'off' : 'class';
+    const response = await fetch(`/api/records?view=leaderboard&language=${$('#leaderboard-language').value}&threshold=90&period=${period}&manage=1`,{cache:'no-store',signal:AbortSignal.timeout(15000)});
     if (!response.ok) throw Error();
     const rows = await response.json();
     if (request !== teacherRankingRequest || !teacherIsActive()) return;
@@ -555,6 +558,7 @@ function renderScores() {
   protectTeacherActions();
 }
 $('#leaderboard-language').onchange = renderScores;
+$('#leaderboard-period').onchange = renderTeacherRanking;
 $('#leaderboard-class').onchange = paintTeacherRanking;
 $('#leaderboard-name').oninput = paintTeacherRanking;
 $('#leaderboard-limit').onchange = paintTeacherRanking;

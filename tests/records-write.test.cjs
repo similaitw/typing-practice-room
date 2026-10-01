@@ -26,6 +26,7 @@ test('record uploads use existing tables without requiring schema creation privi
   assert.equal(res.code, 201);
   assert.equal(statements.length, 1);
   assert.match(statements[0], /INSERT INTO typing_records/);
+  assert.match(statements[0], /NOW\(\)/, 'the server timestamp determines the ranking period');
   assert.equal(res.body.saved, true);
   for (const [correctChars, expectedStatus] of [[0,422],[179,422],[180,201],[200,201]]) {
     statements.length = 0;

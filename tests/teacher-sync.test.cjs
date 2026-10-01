@@ -4,16 +4,17 @@ const vm=require('node:vm');
 const fs=require('node:fs');
 const source=fs.readFileSync('app.js','utf8');
 test('teacher ranking reads the authenticated management ranking API and ignores stale responses',async()=>{
- const nodes={'#leaderboard-language':{value:'en'},'#leaderboard':{innerHTML:''},'#leaderboard-class':{value:'',innerHTML:''},'#leaderboard-name':{value:''},'#leaderboard-limit':{value:'20'},'#leaderboard-filter-status':{},'#ranking-class-stats':{}};
+ const nodes={'#leaderboard-language':{value:'en'},'#leaderboard-period':{value:'class'},'#leaderboard':{innerHTML:''},'#leaderboard-class':{value:'',innerHTML:''},'#leaderboard-name':{value:''},'#leaderboard-limit':{value:'20'},'#leaderboard-filter-status':{},'#ranking-class-stats':{}};
  const pending=[];
  const context=vm.createContext({$:id=>nodes[id],teacherIsActive:()=>true,$$:()=>[],protectTeacherActions:()=>{},escapeHtml:String,formatDate:String,AbortSignal,fetch:url=>new Promise(resolve=>pending.push({url,resolve}))});
  vm.runInContext(fs.readFileSync('core.js','utf8') + '\nconst C = TypingCore;',context);
  vm.runInContext(source.slice(source.indexOf('let teacherRankingRequest ='),source.indexOf('async function changeRecord')),context);
  const first=context.renderTeacherRanking();
  nodes['#leaderboard-language'].value='zh';
+ nodes['#leaderboard-period'].value='off';
  const second=context.renderTeacherRanking();
- assert.equal(pending[0].url,'/api/records?view=leaderboard&language=en&threshold=90&manage=1');
- assert.equal(pending[1].url,'/api/records?view=leaderboard&language=zh&threshold=90&manage=1');
+ assert.equal(pending[0].url,'/api/records?view=leaderboard&language=en&threshold=90&period=class&manage=1');
+ assert.equal(pending[1].url,'/api/records?view=leaderboard&language=zh&threshold=90&period=off&manage=1');
  pending[1].resolve({ok:true,json:async()=>[{studentClass:'701',studentName:'最新',studentSeat:'01',speed:80,unit:'CPM',accuracy:95,createdAt:'2026-09-15'}]});
  await second;
  pending[0].resolve({ok:true,json:async()=>[]});await first;
@@ -45,7 +46,7 @@ test('ranking edit and delete target the selected record, validate input and hon
 
 
 test('filtered teacher ranking edits the matching record and keeps full class statistics',async()=>{
- const nodes={'#leaderboard-language':{value:'en'},'#leaderboard':{},'#leaderboard-class':{value:'701'},'#leaderboard-name':{value:'明'},'#leaderboard-limit':{value:'10'},'#leaderboard-filter-status':{},'#ranking-class-stats':{}};
+ const nodes={'#leaderboard-language':{value:'en'},'#leaderboard-period':{value:'off'},'#leaderboard':{},'#leaderboard-class':{value:'701'},'#leaderboard-name':{value:'明'},'#leaderboard-limit':{value:'10'},'#leaderboard-filter-status':{},'#ranking-class-stats':{}};
  const edit={dataset:{rankEdit:'0'}}, remove={dataset:{rankDelete:'0'}};
  const context=vm.createContext({$:id=>nodes[id],$$:selector=>selector==='[data-rank-edit]'?[edit]:[remove],protectTeacherActions:()=>{},escapeHtml:String,formatDate:String});
  vm.runInContext(fs.readFileSync('core.js','utf8')+'\nconst C = TypingCore;',context);
@@ -57,5 +58,6 @@ test('filtered teacher ranking edits the matching record and keeps full class st
  await edit.onclick();assert.equal(selected,'match');
  await remove.onclick();assert.equal(selected,'match');
  assert.match(nodes['#leaderboard'].innerHTML,/rank-no">2/);
+ assert.match(nodes['#leaderboard-filter-status'].textContent,/下課時間/);
  assert.match(nodes['#ranking-class-stats'].innerHTML,/<td>2<\/td><td>60<\/td>/);
 });

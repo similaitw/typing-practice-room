@@ -30,6 +30,7 @@ test('public leaderboard only includes active cloud students', async () => {
   assert.match(statement, /JOIN typing_students s ON s\.id = r\.student_id AND s\.active = true/);
   assert.match(statement, /FROM typing_records r/);
   assert.match(statement, /r\.source = 'builtin'/);
+  assert.match(statement, /AT TIME ZONE 'Asia\/Taipei'/);
   assert.match(statement, /r\.elapsed_seconds >= 3/);
   assert.match(statement, /r\.correct_chars >= 10/);
   assert.equal(res.body.length, 1);
