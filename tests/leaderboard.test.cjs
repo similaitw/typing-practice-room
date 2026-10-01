@@ -15,6 +15,10 @@ test('public leaderboard uses active roster identity ranking and returns only di
  assert.equal(res.code,200); assert.deepEqual(values,['zh',95]);
  assert.match(statement,/PARTITION BY r\.student_class, r\.student_name, r\.student_seat/);
  assert.match(statement,/JOIN typing_students s ON s\.id = r\.student_id AND s\.active = true/);
+ assert.match(statement,/r\.source = 'builtin'/);
+ assert.match(statement,/r\.speed <= CASE WHEN r\.language = 'en' THEN 300 ELSE 500 END/);
+ assert.match(statement,/ABS\(r\.accuracy - ROUND/);
+ assert.match(statement,/ABS\(r\.speed - ROUND/);
  assert.match(statement,/position = 1/);assert.match(statement,/r\.student_id IS NOT NULL/);
  assert.equal(res.body[0].studentName,'甲');assert.equal(res.body[0].id,undefined);assert.equal(res.body[0].studentId,undefined);
 });
